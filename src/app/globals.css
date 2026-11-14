@@ -1,0 +1,141 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * La app solo tiene tema oscuro. Los componentes de shadcn/ui traen ajustes
+ * marcados como "dark:"; esta línea hace que se apliquen cuando la página
+ * lleva la clase "dark", que está puesta siempre en layout.tsx.
+ */
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Colores y letras de PlatAnt. Son los del diseño aprobado (carpeta mockups/).
+ * Ninguna pantalla debe escribir un color a mano: todas usan estos nombres.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Base */
+  --background: #0a0c0b; /* fondo de la app */
+  --foreground: #f1f4f1; /* texto principal */
+  --card: #131715; /* tarjetas */
+  --card-foreground: #f1f4f1;
+  --popover: #1b201d; /* menús y listas desplegables */
+  --popover-foreground: #f1f4f1;
+  --muted: #1b201d; /* superficies suaves: burbujas, pastillas */
+  --muted-foreground: #9aa39d; /* etiquetas y texto de apoyo */
+  --secondary: #151917; /* barra de navegación y botones neutros */
+  --secondary-foreground: #f1f4f1;
+  --accent: #f1f4f1; /* opción seleccionada */
+  --accent-foreground: #0a0c0b;
+  --border: #232926; /* separadores y fondo de barras */
+  --input: #3a423d; /* borde de campos y botones de contorno */
+  --ring: #b1f03c; /* borde de foco al navegar con teclado */
+
+  /* Verde lima: plata a favor, acción principal y estado bueno */
+  --primary: #b1f03c;
+  --primary-foreground: #0a0c0b;
+
+  /* Coral: plata que sale y estado malo */
+  --destructive: #ff7a66;
+
+  /* Significado de la plata */
+  --libre: #b1f03c;
+  --apartado: #f5b83d;
+  --gasto: #ff7a66;
+
+  /* Tarjeta principal según el estado del usuario: fondo, borde y texto de apoyo */
+  --estado-bueno: #b1f03c;
+  --estado-bueno-fondo: #19240f;
+  --estado-bueno-borde: #2b3b17;
+  --estado-bueno-texto: #c3cfb2;
+
+  --estado-regular: #f5b83d;
+  --estado-regular-fondo: #261d0b;
+  --estado-regular-borde: #403113;
+  --estado-regular-texto: #d9caa8;
+
+  --estado-malo: #ff7a66;
+  --estado-malo-fondo: #2a1613;
+  --estado-malo-borde: #47241e;
+  --estado-malo-texto: #e0c3bc;
+
+  /* Gráficas: se definen con la issue de informes; por ahora, los de la app */
+  --chart-1: #b1f03c;
+  --chart-2: #f5b83d;
+  --chart-3: #ff7a66;
+  --chart-4: #d5dbd6;
+  --chart-5: #9aa39d;
+
+  /* Esquinas */
+  --radius: 1.75rem; /* 28 px, el de las tarjetas */
+}
+
+/* Le presenta los nombres a Tailwind: así existen clases como bg-card o text-libre. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-destructive: var(--destructive);
+
+  --color-libre: var(--libre);
+  --color-apartado: var(--apartado);
+  --color-gasto: var(--gasto);
+
+  --color-estado-bueno: var(--estado-bueno);
+  --color-estado-bueno-fondo: var(--estado-bueno-fondo);
+  --color-estado-bueno-borde: var(--estado-bueno-borde);
+  --color-estado-bueno-texto: var(--estado-bueno-texto);
+  --color-estado-regular: var(--estado-regular);
+  --color-estado-regular-fondo: var(--estado-regular-fondo);
+  --color-estado-regular-borde: var(--estado-regular-borde);
+  --color-estado-regular-texto: var(--estado-regular-texto);
+  --color-estado-malo: var(--estado-malo);
+  --color-estado-malo-fondo: var(--estado-malo-fondo);
+  --color-estado-malo-borde: var(--estado-malo-borde);
+  --color-estado-malo-texto: var(--estado-malo-texto);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* font-sans es la letra de todo; font-display, la de cifras y títulos. */
+  --font-sans: var(--font-instrument), system-ui, sans-serif;
+  --font-display: var(--font-bricolage), system-ui, sans-serif;
+  --font-heading: var(--font-bricolage), system-ui, sans-serif;
+
+  --radius-sm: calc(var(--radius) - 12px); /* 16 px: celdas dentro de una tarjeta */
+  --radius-md: calc(var(--radius) - 6px); /* 22 px: campos y pastillas */
+  --radius-lg: var(--radius); /* 28 px: tarjetas */
+  --radius-xl: calc(var(--radius) + 2px); /* 30 px: barra de navegación */
+  --radius-2xl: calc(var(--radius) + 8px); /* 36 px */
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground;
+    font-size: 15px;
+    line-height: 1.35;
+  }
+}

@@ -1,0 +1,49 @@
+# Revisión automática: corre en cada PR y en cada cambio que llega a main.
+# Si falla el lint, los tipos, una prueba o la compilación, el PR queda marcado como fallido.
+name: Revisión
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: revision-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  revisar:
+    name: Lint, tipos, pruebas y compilación
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # Instala pnpm (la versión que fija package.json) y Node, y guarda la caché de paquetes.
+      - uses: pnpm/setup@v3
+        with:
+          runtime: node@24
+          cache: true
+          install: false
+
+      # --frozen-lockfile: instala exactamente lo que dice pnpm-lock.yaml, o falla.
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Formato
+        run: pnpm run format:check
+
+      - name: Tipos
+        run: pnpm run typecheck
+
+      - name: Pruebas
+        run: pnpm run test
+
+      - name: Compilación
+        run: pnpm run build
