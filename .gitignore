@@ -1,0 +1,33 @@
+# Instrucciones locales para asistentes de código: no se suben al repositorio
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+AGENTS.md
+
+# Variables de entorno y claves
+.env
+.env.*
+!.env.example
+
+# Dependencias
+/node_modules
+
+# Next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# Pruebas
+/coverage
+
+# Vercel
+.vercel
+
+# Varios
+.DS_Store
+Thumbs.db
+*.pem
+npm-debug.log*
+pnpm-debug.log*
