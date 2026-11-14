@@ -4,65 +4,15 @@
 
 # PlatAnt
 
-App web de finanzas personales para quien cobra por quincena y tiene gastos mensuales. El nombre mezcla «plata» y _ant_ (hormiga), por los gastos hormiga.
+App de finanzas personales enfocada en personas que reciben sus pagos quincenalmente, pero que gran parte de sus gastos se cobran mensualmente.
 
-Responde tres preguntas:
+En esta app buscamos ayudar a estas personas a manejar de mejor manera su dinero, identificando gastos hormiga y malas prácticas por medio de IA, la cual diariamente hace un análisis y te da recomendaciones.
+
+La app responde tres preguntas principales:
 
 - **¿Cuánto tengo?** En la cuenta y en efectivo.
 - **¿Cuánto puedo gastar hoy?** Lo que queda libre después de apartar los compromisos de la quincena.
-- **¿A dónde se me va la plata?** Incluidos los gastos pequeños que se repiten y no se notan.
-
-## Estado
-
-En construcción. Hoy está lista la base del proyecto: la identidad visual, la app instalable en el celular y las revisiones automáticas. El plan completo está en las [issues](https://github.com/Zacks081/PlatAnt/issues), que se trabajan en orden.
-
-El diseño aprobado de las pantallas está en [`mockups/`](mockups/).
-
-## Tecnologías
-
-| Parte                 | Tecnología                        |
-| --------------------- | --------------------------------- |
-| App                   | Next.js (App Router) y TypeScript |
-| Interfaz              | Tailwind CSS y shadcn/ui          |
-| Base de datos y login | Supabase                          |
-| Despliegue            | Vercel                            |
-| Celular               | App instalable (PWA)              |
-| Asistente             | Gemini                            |
-| Pruebas               | Vitest                            |
-
-## Cómo correrla en tu computador
-
-Necesitas [Node.js](https://nodejs.org) 24 y [pnpm](https://pnpm.io/es/installation) 12.
-
-```bash
-pnpm install
-pnpm dev
-```
-
-Luego abre <http://localhost:3000>.
-
-## Comandos
-
-| Comando          | Qué hace                                                   |
-| ---------------- | ---------------------------------------------------------- |
-| `pnpm dev`       | Abre la app en modo desarrollo                             |
-| `pnpm build`     | Compila la versión que se publica                          |
-| `pnpm lint`      | Revisa errores comunes en el código                        |
-| `pnpm typecheck` | Revisa los tipos de TypeScript                             |
-| `pnpm test`      | Corre las pruebas                                          |
-| `pnpm format`    | Ordena el formato del código                               |
-| `pnpm check`     | Corre lint, formato, tipos y pruebas, igual que en cada PR |
-
-## Carpetas
-
-| Carpeta      | Contenido                                               |
-| ------------ | ------------------------------------------------------- |
-| `src/app`    | Las pantallas de la app                                 |
-| `src/lib`    | Lógica reutilizable, como el formato de la plata        |
-| `src/config` | Datos generales: nombre de la app y valores por defecto |
-| `public`     | Íconos y logo que usa la app                            |
-| `marca`      | Logo original                                           |
-| `mockups`    | Diseño aprobado de las pantallas                        |
+- **¿A dónde se me va la plata?** Incluidos los gastos pequeños que se repiten y uno cree que no se notan, es decir, los gastos hormiga.
 
 ## Derechos
 
