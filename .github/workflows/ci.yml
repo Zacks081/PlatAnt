@@ -1,11 +1,11 @@
-# Revisión automática: corre en cada PR y en cada cambio que llega a main.
+# Revisión automática: corre en cada PR y en cada cambio que llega a main o a develop.
 # Si falla el lint, los tipos, una prueba o la compilación, el PR queda marcado como fallido.
 name: Revisión
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 permissions:
   contents: read
