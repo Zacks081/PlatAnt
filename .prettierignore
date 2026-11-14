@@ -1,0 +1,19 @@
+# Generado
+.next
+out
+build
+coverage
+node_modules
+pnpm-lock.yaml
+next-env.d.ts
+
+# Referencia de diseño y marca: se dejan tal cual
+mockups
+marca
+public
+
+# Instrucciones locales para asistentes de código
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+.claude
