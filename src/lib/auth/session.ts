@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { cache } from "react";
 
+import { currentPath } from "@/lib/onboarding/steps";
 import type { Database } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -14,6 +15,10 @@ export type CurrentUser = {
   timeZone: string;
   payFrequency: Database["public"]["Enums"]["pay_frequency"];
   onboardingCompleted: boolean;
+  /** Último paso terminado del recorrido inicial (0 a 6). */
+  onboardingStep: number;
+  monthlyIncome: number | null;
+  payDays: number[];
 };
 
 /**
@@ -35,7 +40,9 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser> => {
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("name, currency, time_zone, pay_frequency, onboarding_completed")
+    .select(
+      "name, currency, time_zone, pay_frequency, onboarding_completed, onboarding_step, monthly_income, pay_days",
+    )
     .eq("id", userId)
     .maybeSingle();
 
@@ -51,5 +58,18 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser> => {
     timeZone: profile.time_zone,
     payFrequency: profile.pay_frequency,
     onboardingCompleted: profile.onboarding_completed,
+    onboardingStep: profile.onboarding_step,
+    monthlyIncome: profile.monthly_income,
+    payDays: profile.pay_days,
   };
 });
+
+/**
+ * Igual que getCurrentUser, pero además exige haber terminado la configuración inicial.
+ * Lo usan las páginas de la app; quien no ha terminado va al paso que le toca.
+ */
+export async function requireOnboardedUser(): Promise<CurrentUser> {
+  const user = await getCurrentUser();
+  if (!user.onboardingCompleted) redirect(currentPath(user));
+  return user;
+}

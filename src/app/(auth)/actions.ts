@@ -4,8 +4,9 @@ import { redirect } from "next/navigation";
 
 import type { FormState } from "@/lib/auth/form-state";
 import { authMessages, signInErrorMessage, signUpErrorMessage } from "@/lib/auth/messages";
-import { firstFieldErrors, readForm, signInSchema, signUpSchema } from "@/lib/auth/validation";
+import { signInSchema, signUpSchema } from "@/lib/auth/validation";
 import { isRegistrationOpen } from "@/lib/env";
+import { firstFieldErrors, readForm } from "@/lib/forms";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 

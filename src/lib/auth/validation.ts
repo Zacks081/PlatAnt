@@ -40,25 +40,3 @@ export const signInSchema = z.object({
 });
 
 export const signUpSchema = z.object({ name, email, password: newPassword });
-
-export type FieldErrors = Partial<Record<string, string>>;
-
-/** Primer error de cada campo, listo para mostrar debajo del campo. */
-export function firstFieldErrors(error: z.ZodError): FieldErrors {
-  const errors: FieldErrors = {};
-  for (const issue of error.issues) {
-    const field = String(issue.path[0] ?? "form");
-    errors[field] ??= issue.message;
-  }
-  return errors;
-}
-
-/** Lee del formulario solo los campos pedidos, como texto. */
-export function readForm<const K extends string>(formData: FormData, keys: readonly K[]) {
-  return Object.fromEntries(
-    keys.map((key) => {
-      const value = formData.get(key);
-      return [key, typeof value === "string" ? value : ""];
-    }),
-  ) as Record<K, string>;
-}

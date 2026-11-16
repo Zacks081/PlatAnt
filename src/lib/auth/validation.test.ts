@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { firstFieldErrors, readForm, signInSchema, signUpSchema } from "./validation";
+import { firstFieldErrors, readForm } from "@/lib/forms";
+
+import { signInSchema, signUpSchema } from "./validation";
 
 const validSignUp = { name: "Santiago", email: "santiago@example.com", password: "clave1234" };
 

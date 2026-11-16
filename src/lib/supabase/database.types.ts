@@ -23,16 +23,218 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "profiles": {
+            "categories": {
                   Row: {
-                    "created_at": string,"currency": string,"id": string,"name": string,"onboarding_completed": boolean,"pay_frequency": Database["public"]['Enums']["pay_frequency"],"time_zone": string,"updated_at": string
+                    "archived_at": string | null,"created_at": string,"id": string,"is_system": boolean,"kind": Database["public"]['Enums']["category_kind"],"name": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"currency"?: string,"id": string,"name": string,"onboarding_completed"?: boolean,"pay_frequency"?: Database["public"]['Enums']["pay_frequency"],"time_zone"?: string,"updated_at"?: string
+                    "archived_at"?: string | null,"created_at"?: string,"id"?: string,"is_system"?: boolean,"kind": Database["public"]['Enums']["category_kind"],"name": string,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"currency"?: string,"id"?: string,"name"?: string,"onboarding_completed"?: boolean,"pay_frequency"?: Database["public"]['Enums']["pay_frequency"],"time_zone"?: string,"updated_at"?: string
+                    "archived_at"?: string | null,"created_at"?: string,"id"?: string,"is_system"?: boolean,"kind"?: Database["public"]['Enums']["category_kind"],"name"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "categories_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"credit_cards": {
+                  Row: {
+                    "created_at": string,"id": string,"monthly_rate": number,"payment_day": number,"pocket_id": string,"rate_is_estimated": boolean,"statement_day": number,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"monthly_rate"?: number,"payment_day": number,"pocket_id": string,"rate_is_estimated"?: boolean,"statement_day": number,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"monthly_rate"?: number,"payment_day"?: number,"pocket_id"?: string,"rate_is_estimated"?: boolean,"statement_day"?: number,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "credit_cards_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: true
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "credit_cards_user_id_pocket_id_fkey"
+      columns: ["user_id","pocket_id"]
+isOneToOne: false
+      referencedRelation: "pockets"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
+                },"debts": {
+                  Row: {
+                    "closed_at": string | null,"created_at": string,"id": string,"installment_amount": number,"installments_remaining": number,"name": string,"original_amount": number,"payment_day": number,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "closed_at"?: string | null,"created_at"?: string,"id"?: string,"installment_amount": number,"installments_remaining": number,"name": string,"original_amount": number,"payment_day": number,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "closed_at"?: string | null,"created_at"?: string,"id"?: string,"installment_amount"?: number,"installments_remaining"?: number,"name"?: string,"original_amount"?: number,"payment_day"?: number,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "debts_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"fixed_expenses": {
+                  Row: {
+                    "active": boolean,"amount": number,"category_id": string,"created_at": string,"due_day": number,"id": string,"name": string,"split": Database["public"]['Enums']["expense_split"],"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"amount": number,"category_id": string,"created_at"?: string,"due_day": number,"id"?: string,"name": string,"split"?: Database["public"]['Enums']["expense_split"],"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "active"?: boolean,"amount"?: number,"category_id"?: string,"created_at"?: string,"due_day"?: number,"id"?: string,"name"?: string,"split"?: Database["public"]['Enums']["expense_split"],"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "fixed_expenses_user_id_category_id_fkey"
+      columns: ["user_id","category_id"]
+isOneToOne: false
+      referencedRelation: "categories"
+      referencedColumns: ["user_id","id"]
+    },{
+      foreignKeyName: "fixed_expenses_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"goals": {
+                  Row: {
+                    "achieved_at": string | null,"created_at": string,"id": string,"name": string,"target_amount": number,"target_date": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "achieved_at"?: string | null,"created_at"?: string,"id"?: string,"name": string,"target_amount": number,"target_date": string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "achieved_at"?: string | null,"created_at"?: string,"id"?: string,"name"?: string,"target_amount"?: number,"target_date"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "goals_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"installment_plans": {
+                  Row: {
+                    "created_at": string,"credit_card_id": string,"id": string,"installments_count": number,"is_initial": boolean,"kind": Database["public"]['Enums']["installment_plan_kind"],"movement_id": string | null,"name": string,"principal": number,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"credit_card_id": string,"id"?: string,"installments_count": number,"is_initial"?: boolean,"kind": Database["public"]['Enums']["installment_plan_kind"],"movement_id"?: string | null,"name": string,"principal": number,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"credit_card_id"?: string,"id"?: string,"installments_count"?: number,"is_initial"?: boolean,"kind"?: Database["public"]['Enums']["installment_plan_kind"],"movement_id"?: string | null,"name"?: string,"principal"?: number,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "installment_plans_user_id_credit_card_id_fkey"
+      columns: ["user_id","credit_card_id"]
+isOneToOne: false
+      referencedRelation: "credit_cards"
+      referencedColumns: ["user_id","id"]
+    },{
+      foreignKeyName: "installment_plans_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "installment_plans_user_id_movement_id_fkey"
+      columns: ["user_id","movement_id"]
+isOneToOne: false
+      referencedRelation: "movements"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
+                },"movements": {
+                  Row: {
+                    "amount": number,"category_id": string | null,"created_at": string,"description": string | null,"id": string,"kind": Database["public"]['Enums']["movement_kind"],"occurred_on": string,"origin": Database["public"]['Enums']["movement_origin"],"pocket_id": string,"to_pocket_id": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"category_id"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"kind": Database["public"]['Enums']["movement_kind"],"occurred_on": string,"origin"?: Database["public"]['Enums']["movement_origin"],"pocket_id": string,"to_pocket_id"?: string | null,"user_id"?: string
+                  }
+                  Update: {
+                    "amount"?: number,"category_id"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"kind"?: Database["public"]['Enums']["movement_kind"],"occurred_on"?: string,"origin"?: Database["public"]['Enums']["movement_origin"],"pocket_id"?: string,"to_pocket_id"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "movements_user_id_category_id_fkey"
+      columns: ["user_id","category_id"]
+isOneToOne: false
+      referencedRelation: "categories"
+      referencedColumns: ["user_id","id"]
+    },{
+      foreignKeyName: "movements_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "movements_user_id_pocket_id_fkey"
+      columns: ["user_id","pocket_id"]
+isOneToOne: false
+      referencedRelation: "pockets"
+      referencedColumns: ["user_id","id"]
+    },{
+      foreignKeyName: "movements_user_id_to_pocket_id_fkey"
+      columns: ["user_id","to_pocket_id"]
+isOneToOne: false
+      referencedRelation: "pockets"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
+                },"pockets": {
+                  Row: {
+                    "created_at": string,"id": string,"kind": Database["public"]['Enums']["pocket_kind"],"name": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"kind": Database["public"]['Enums']["pocket_kind"],"name": string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"kind"?: Database["public"]['Enums']["pocket_kind"],"name"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "pockets_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"profiles": {
+                  Row: {
+                    "created_at": string,"currency": string,"id": string,"monthly_income": number | null,"name": string,"onboarding_completed": boolean,"onboarding_step": number,"pay_days": (number)[],"pay_frequency": Database["public"]['Enums']["pay_frequency"],"time_zone": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"currency"?: string,"id": string,"monthly_income"?: number | null,"name": string,"onboarding_completed"?: boolean,"onboarding_step"?: number,"pay_days"?: (number)[],"pay_frequency"?: Database["public"]['Enums']["pay_frequency"],"time_zone"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"currency"?: string,"id"?: string,"monthly_income"?: number | null,"name"?: string,"onboarding_completed"?: boolean,"onboarding_step"?: number,"pay_days"?: (number)[],"pay_frequency"?: Database["public"]['Enums']["pay_frequency"],"time_zone"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -43,10 +245,18 @@ export type Database = {
             [_ in never]: never
           }
           Functions: {
-            [_ in never]: never
+            "save_credit_card":
+{ Args: { "p_debt": number,"p_monthly_rate": number,"p_payment_day": number,"p_rate_is_estimated": boolean,"p_statement_day": number }; Returns: string
+                           },
+"seed_user_defaults":
+{ Args: { "p_user_id": string }; Returns: undefined
+                           },
+"set_opening_balance":
+{ Args: { "p_amount": number,"p_kind": Database["public"]['Enums']["pocket_kind"] }; Returns: undefined
+                           }
           }
           Enums: {
-            "pay_frequency": "biweekly"|"monthly"
+            "category_kind": "expense"|"income","expense_split": "first"|"second"|"half","installment_plan_kind": "purchase"|"advance","movement_kind": "expense"|"income"|"transfer","movement_origin": "manual"|"opening_balance"|"reconciliation"|"statement","pay_frequency": "biweekly"|"monthly","pocket_kind": "account"|"cash"|"credit_card"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -166,7 +376,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "pay_frequency": ["biweekly", "monthly"]
+            "category_kind": ["expense", "income"],"expense_split": ["first", "second", "half"],"installment_plan_kind": ["purchase", "advance"],"movement_kind": ["expense", "income", "transfer"],"movement_origin": ["manual", "opening_balance", "reconciliation", "statement"],"pay_frequency": ["biweekly", "monthly"],"pocket_kind": ["account", "cash", "credit_card"]
           }
         }
 } as const
