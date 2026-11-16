@@ -19,6 +19,8 @@
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
     "db:types": "supabase gen types typescript --local > src/lib/supabase/database.types.ts",
+    "db:push": "node scripts/db-remote.mjs db push",
+    "db:status": "node scripts/db-remote.mjs migration list",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run test"
