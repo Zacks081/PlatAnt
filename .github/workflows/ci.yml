@@ -1,5 +1,7 @@
 # Revisión automática: corre en cada PR y en cada cambio que llega a main o a develop.
 # Si falla el lint, los tipos, una prueba o la compilación, el PR queda marcado como fallido.
+# Las pruebas de base de datos corren contra un Supabase local levantado aquí mismo con Docker;
+# nunca tocan el proyecto real ni necesitan claves.
 name: Revisión
 
 on:
@@ -18,7 +20,7 @@ jobs:
   revisar:
     name: Lint, tipos, pruebas y compilación
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -47,3 +49,15 @@ jobs:
 
       - name: Compilación
         run: pnpm run build
+
+      # Crea la base de datos desde cero con las migraciones del repositorio.
+      - name: Levantar Supabase local
+        run: pnpm run db:start
+
+      - name: Los tipos generados están al día con las migraciones
+        run: |
+          pnpm exec supabase gen types typescript --local > /tmp/database.types.ts
+          diff /tmp/database.types.ts src/lib/supabase/database.types.ts
+
+      - name: Pruebas de base de datos (seguridad entre usuarios)
+        run: pnpm run test:db

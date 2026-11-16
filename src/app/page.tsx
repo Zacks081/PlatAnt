@@ -1,18 +1,16 @@
 import Image from "next/image";
+import { Suspense } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Wordmark } from "@/components/wordmark";
 import { appConfig } from "@/config/app";
-import { formatMoney } from "@/lib/money";
+import { getCurrentUser } from "@/lib/auth/session";
 
-const colorMeanings = [
-  { name: "Libre", dotClass: "bg-libre" },
-  { name: "Apartado", dotClass: "bg-apartado" },
-  { name: "Gastado", dotClass: "bg-gasto" },
-];
+import { signOut } from "./(auth)/actions";
 
 /**
- * Pantalla provisional. Solo confirma que la base carga: logo, colores,
- * letras y formato de plata. El inicio de verdad llega con las issues siguientes.
+ * Inicio provisional. Confirma que la sesión y el perfil funcionan;
+ * el inicio de verdad (balance, libre para gastar) llega con las issues siguientes.
  */
 export default function HomePage() {
   return (
@@ -27,32 +25,37 @@ export default function HomePage() {
         className="mx-auto mb-7 h-auto w-full max-w-[280px]"
       />
 
-      <section className="flex flex-col gap-1.5 rounded-lg border border-estado-bueno-borde bg-estado-bueno-fondo px-5 pt-[22px] pb-5">
-        <p className="text-estado-bueno-texto">Así se va a ver tu plata</p>
-        <p className="font-display text-[52px] leading-none font-bold tracking-[-0.03em]">
-          {formatMoney(1_200_000)}
-        </p>
-        <p className="mt-1 text-sm text-estado-bueno-texto">
-          <span className="font-semibold text-estado-bueno">La base está lista</span> · todo cargó
-          bien
-        </p>
-      </section>
+      {/* Leer la sesión depende de cada petición, así que va detrás de Suspense. */}
+      <Suspense fallback={<div aria-hidden="true" className="h-[138px] rounded-lg bg-card" />}>
+        <Welcome />
+      </Suspense>
 
-      <section className="flex flex-col gap-3.5 rounded-lg bg-card p-5">
-        <h2 className="font-display text-lg font-semibold">Los colores de la app</h2>
-        <ul className="grid grid-cols-3 gap-2">
-          {colorMeanings.map((color) => (
-            <li key={color.name} className="flex items-center gap-1.5 text-sm">
-              <span aria-hidden="true" className={`size-2 rounded-full ${color.dotClass}`} />
-              {color.name}
-            </li>
-          ))}
-        </ul>
-      </section>
+      <form action={signOut} className="mt-2">
+        <Button type="submit" variant="outline" className="w-full">
+          Cerrar sesión
+        </Button>
+      </form>
 
       <p className="mt-5 text-center text-sm text-muted-foreground">
         <Wordmark className="text-foreground" /> · pantalla provisional
       </p>
     </main>
+  );
+}
+
+async function Welcome() {
+  const user = await getCurrentUser();
+
+  return (
+    <section className="flex flex-col gap-1.5 rounded-lg border border-estado-bueno-borde bg-estado-bueno-fondo px-5 pt-[22px] pb-5">
+      <p className="text-estado-bueno-texto">Tu cuenta está lista</p>
+      <p className="font-display text-[40px] leading-none font-bold tracking-[-0.03em] break-words">
+        Hola, {user.name}
+      </p>
+      <p className="mt-1 text-sm text-estado-bueno-texto">
+        <span className="font-semibold text-estado-bueno">Entraste bien</span> · falta configurar tu
+        plata
+      </p>
+    </section>
   );
 }
