@@ -17,3 +17,5 @@ CLAUDE.md
 CLAUDE.local.md
 AGENTS.md
 .claude
+src/lib/supabase/database.types.ts
+supabase/.temp
