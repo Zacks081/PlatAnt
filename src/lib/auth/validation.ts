@@ -30,8 +30,8 @@ const newPassword = z
 const name = z
   .string()
   .trim()
-  .min(1, "Escribe tu nombre.")
-  .max(NAME_MAX_LENGTH, `El nombre puede tener máximo ${NAME_MAX_LENGTH} caracteres.`);
+  .min(1, "Escribe tu nombre de usuario.")
+  .max(NAME_MAX_LENGTH, `El nombre de usuario puede tener máximo ${NAME_MAX_LENGTH} caracteres.`);
 
 export const signInSchema = z.object({
   email,

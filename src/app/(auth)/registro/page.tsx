@@ -27,11 +27,7 @@ export default function SignUpPage() {
   }
 
   return (
-    <AuthScreen
-      title="Crea tu cuenta"
-      description="Solo necesitas tu nombre, un correo y una contraseña."
-      footer={signInLink}
-    >
+    <AuthScreen title="Crea tu cuenta" footer={signInLink}>
       <AuthForm
         action={signUp}
         submitLabel="Crear cuenta"
@@ -39,10 +35,11 @@ export default function SignUpPage() {
         fields={[
           {
             name: "name",
-            label: "Nombre",
+            label: "Nombre de usuario",
             type: "text",
-            autoComplete: "given-name",
-            hint: "Así te va a saludar la app.",
+            // "nickname" y no "username": así el administrador de contraseñas no lo toma
+            // como el usuario para entrar, que es el correo.
+            autoComplete: "nickname",
             maxLength: NAME_MAX_LENGTH,
           },
           { name: "email", label: "Correo", type: "email", autoComplete: "email" },

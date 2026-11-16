@@ -45,7 +45,7 @@ export function AuthForm({ action, fields, submitLabel, pendingLabel }: AuthForm
           return (
             <div
               key={field.name}
-              className={`flex flex-col gap-1 py-3.5 ${index > 0 ? "border-t border-border" : ""}`}
+              className={`group/field flex flex-col gap-1 py-3.5 ${index > 0 ? "border-t border-border" : ""}`}
             >
               <label htmlFor={inputId} className="text-[13px] text-muted-foreground">
                 {field.label}
@@ -88,7 +88,11 @@ export function AuthForm({ action, fields, submitLabel, pendingLabel }: AuthForm
                 </p>
               ) : (
                 field.hint && (
-                  <p id={`${inputId}-hint`} className="text-[13px] text-muted-foreground">
+                  // La ayuda solo aparece mientras el cursor está en el campo.
+                  <p
+                    id={`${inputId}-hint`}
+                    className="hidden text-[13px] text-muted-foreground group-focus-within/field:block"
+                  >
                     {field.hint}
                   </p>
                 )

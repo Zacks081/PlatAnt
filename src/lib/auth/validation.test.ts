@@ -25,8 +25,8 @@ describe("registro", () => {
   });
 
   it("rechaza el nombre vacío o de solo espacios", () => {
-    expect(errorsOf({ ...validSignUp, name: "" }).name).toBe("Escribe tu nombre.");
-    expect(errorsOf({ ...validSignUp, name: "   " }).name).toBe("Escribe tu nombre.");
+    expect(errorsOf({ ...validSignUp, name: "" }).name).toBe("Escribe tu nombre de usuario.");
+    expect(errorsOf({ ...validSignUp, name: "   " }).name).toBe("Escribe tu nombre de usuario.");
   });
 
   it("rechaza un nombre demasiado largo", () => {

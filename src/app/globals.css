@@ -139,3 +139,18 @@
     line-height: 1.35;
   }
 }
+
+/*
+ * Cuando el navegador rellena un campo (autocompletar de Chrome, por ejemplo), le pone
+ * un fondo azul claro que desentona con el tema oscuro. Aquí se tapa con el color de la
+ * tarjeta donde van los campos y se deja el texto en su color normal.
+ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--card) inset;
+  -webkit-text-fill-color: var(--foreground);
+  caret-color: var(--foreground);
+  /* El navegador pinta su fondo con un cambio de color; así se retrasa para siempre. */
+  transition: background-color 600000s 0s;
+}
