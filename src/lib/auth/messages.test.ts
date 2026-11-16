@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { authMessages, safeNextPath, signInErrorMessage, signUpErrorMessage } from "./messages";
+import { authMessages, signInErrorMessage, signUpErrorMessage } from "./messages";
 
 describe("mensajes de inicio de sesión", () => {
   it("responde lo mismo si el correo no existe o si la contraseña está mal", () => {
@@ -38,17 +38,4 @@ describe("mensajes de registro", () => {
   it("usa el mensaje general para lo demás", () => {
     expect(signUpErrorMessage({ code: "unexpected_failure" })).toBe(authMessages.generic);
   });
-});
-
-describe("safeNextPath", () => {
-  it("acepta rutas internas", () => {
-    expect(safeNextPath("/nueva-contrasena")).toBe("/nueva-contrasena");
-  });
-
-  it.each([null, undefined, "", "https://malo.example", "//malo.example", "/\\malo.example", "x"])(
-    "manda al inicio si llega %s",
-    (next) => {
-      expect(safeNextPath(next)).toBe("/");
-    },
-  );
 });

@@ -2,9 +2,8 @@ import type { FieldErrors } from "./validation";
 
 /** Lo que una acción de formulario le devuelve a la pantalla. */
 export type FormState = {
-  /** Mensaje general: un error, o la confirmación cuando `ok` es verdadero. */
+  /** Mensaje general de error. */
   message?: string;
-  ok?: boolean;
   /** Error de cada campo, por nombre. */
   errors?: FieldErrors;
   /** Lo que la persona había escrito, para no borrárselo. Nunca incluye contraseñas. */

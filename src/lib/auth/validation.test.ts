@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  firstFieldErrors,
-  newPasswordSchema,
-  readForm,
-  signInSchema,
-  signUpSchema,
-} from "./validation";
+import { firstFieldErrors, readForm, signInSchema, signUpSchema } from "./validation";
 
 const validSignUp = { name: "Santiago", email: "santiago@example.com", password: "clave1234" };
 
@@ -61,7 +55,7 @@ describe("registro", () => {
   });
 
   it("acepta letras con tilde y eñe en la contraseña", () => {
-    expect(newPasswordSchema.safeParse({ password: "ñandú2026" }).success).toBe(true);
+    expect(signUpSchema.safeParse({ ...validSignUp, password: "ñandú2026" }).success).toBe(true);
   });
 
   it("informa un solo error por campo", () => {

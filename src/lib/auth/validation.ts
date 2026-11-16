@@ -41,10 +41,6 @@ export const signInSchema = z.object({
 
 export const signUpSchema = z.object({ name, email, password: newPassword });
 
-export const passwordResetRequestSchema = z.object({ email });
-
-export const newPasswordSchema = z.object({ password: newPassword });
-
 export type FieldErrors = Partial<Record<string, string>>;
 
 /** Primer error de cada campo, listo para mostrar debajo del campo. */

@@ -4,14 +4,7 @@ import { redirect } from "next/navigation";
 
 import type { FormState } from "@/lib/auth/form-state";
 import { authMessages, signInErrorMessage, signUpErrorMessage } from "@/lib/auth/messages";
-import {
-  firstFieldErrors,
-  newPasswordSchema,
-  passwordResetRequestSchema,
-  readForm,
-  signInSchema,
-  signUpSchema,
-} from "@/lib/auth/validation";
+import { firstFieldErrors, readForm, signInSchema, signUpSchema } from "@/lib/auth/validation";
 import { isRegistrationOpen } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -58,42 +51,6 @@ export async function signUp(_previous: FormState, formData: FormData): Promise<
   const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
   // La cuenta ya existe; si la entrada automática falla, que entre desde el login.
   if (signInError) redirect("/entrar");
-
-  redirect("/");
-}
-
-/** Pedir el correo para cambiar la contraseña. Responde igual exista o no la cuenta. */
-export async function requestPasswordReset(
-  _previous: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  const form = readForm(formData, ["email"]);
-  const parsed = passwordResetRequestSchema.safeParse(form);
-  if (!parsed.success) return { errors: firstFieldErrors(parsed.error), values: form };
-
-  const supabase = await createClient();
-  await supabase.auth.resetPasswordForEmail(parsed.data.email);
-
-  return { ok: true, message: authMessages.resetLinkSent };
-}
-
-/** Guardar la contraseña nueva. Pide sesión: llega aquí quien abrió el enlace del correo. */
-export async function updatePassword(_previous: FormState, formData: FormData): Promise<FormState> {
-  const parsed = newPasswordSchema.safeParse(readForm(formData, ["password"]));
-  if (!parsed.success) return { errors: firstFieldErrors(parsed.error) };
-
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  if (!data?.claims) redirect("/entrar");
-
-  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
-  if (error) {
-    if (error.code === "same_password") {
-      return { errors: { password: "Esa es tu contraseña actual. Elige una distinta." } };
-    }
-    if (error.code === "weak_password") return { errors: { password: authMessages.weakPassword } };
-    return { message: authMessages.generic };
-  }
 
   redirect("/");
 }

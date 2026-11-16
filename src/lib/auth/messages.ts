@@ -10,9 +10,6 @@ export const authMessages = {
   registrationClosed: "El registro está cerrado por ahora.",
   signUpFailed: "No pudimos crear la cuenta con ese correo. Si ya tienes una, entra con ella.",
   weakPassword: "Esa contraseña es muy fácil de adivinar. Prueba con otra.",
-  resetLinkSent:
-    "Si ese correo tiene una cuenta, te llegará un enlace en unos minutos. Revisa también la carpeta de spam.",
-  expiredLink: "Ese enlace ya no sirve. Pide uno nuevo.",
 } as const;
 
 type AuthErrorLike = { code?: string | null; status?: number | null } | null | undefined;
@@ -41,16 +38,4 @@ export function signUpErrorMessage(error: AuthErrorLike): string {
     default:
       return authMessages.generic;
   }
-}
-
-/**
- * Ruta interna segura a la que volver después de un enlace del correo.
- * Solo acepta rutas propias ("/algo"); cualquier otra cosa va al inicio, para que
- * nadie arme un enlace que lleve a otro sitio.
- */
-export function safeNextPath(next: string | null | undefined, fallback = "/"): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//") || next.includes("\\")) {
-    return fallback;
-  }
-  return next;
 }

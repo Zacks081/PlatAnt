@@ -3,13 +3,14 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getSupabasePublicEnv } from "@/lib/env";
 
-/** Páginas que se pueden abrir sin sesión. Todo lo demás pide entrar. */
-const PUBLIC_PATHS = ["/entrar", "/registro", "/recuperar", "/auth/confirm"];
-/** Páginas que no tienen sentido con la sesión ya abierta. */
-const GUEST_ONLY_PATHS = ["/entrar", "/registro", "/recuperar"];
+/**
+ * Páginas para quien no ha entrado. Sin sesión, son las únicas que se pueden abrir;
+ * con sesión, no tienen sentido y mandan al inicio.
+ */
+const GUEST_PATHS = ["/entrar", "/registro"];
 
-const matches = (pathname: string, paths: string[]) =>
-  paths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+const isGuestPath = (pathname: string) =>
+  GUEST_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 
 /**
  * Corre antes de cada página: renueva la sesión si está por vencer y decide si
@@ -57,8 +58,8 @@ export async function updateSession(request: NextRequest) {
     return redirect;
   };
 
-  if (!isSignedIn && !matches(pathname, PUBLIC_PATHS)) return redirectTo("/entrar");
-  if (isSignedIn && matches(pathname, GUEST_ONLY_PATHS)) return redirectTo("/");
+  if (!isSignedIn && !isGuestPath(pathname)) return redirectTo("/entrar");
+  if (isSignedIn && isGuestPath(pathname)) return redirectTo("/");
 
   return response;
 }

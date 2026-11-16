@@ -29,14 +29,6 @@ export function AuthForm({ action, fields, submitLabel, pendingLabel }: AuthForm
   const [showPassword, setShowPassword] = useState(false);
   const formId = useId();
 
-  if (state.ok) {
-    return (
-      <p role="status" className="rounded-lg bg-card p-5 leading-normal">
-        {state.message}
-      </p>
-    );
-  }
-
   return (
     <form action={formAction} noValidate className="flex flex-col gap-4">
       <div className="flex flex-col rounded-[24px] bg-card px-5">

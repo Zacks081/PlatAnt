@@ -15,16 +15,11 @@ export default function SignInPage() {
       title="Hola de nuevo"
       description="Entra para ver cómo va tu plata."
       footer={
-        <>
-          <Link href="/recuperar" className={authLinkClass}>
-            Olvidé mi contraseña
+        isRegistrationOpen() && (
+          <Link href="/registro" className={authLinkClass}>
+            Crear una cuenta
           </Link>
-          {isRegistrationOpen() && (
-            <Link href="/registro" className={authLinkClass}>
-              Crear una cuenta
-            </Link>
-          )}
-        </>
+        )
       }
     >
       <AuthForm
