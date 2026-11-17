@@ -90,6 +90,7 @@ describe("gasto fijo", () => {
     amount: "700.000",
     name: "  Arriendo ",
     categoryId: CATEGORY,
+    newCategory: "",
     dueDay: "5",
     split: "first",
   };
@@ -99,6 +100,7 @@ describe("gasto fijo", () => {
       amount: 700_000,
       name: "Arriendo",
       categoryId: CATEGORY,
+      newCategory: "",
       dueDay: 5,
       split: "first",
     });
@@ -109,6 +111,7 @@ describe("gasto fijo", () => {
       amount: "",
       name: " ",
       categoryId: "",
+      newCategory: "",
       dueDay: "",
       split: "",
     });
@@ -120,17 +123,25 @@ describe("gasto fijo", () => {
       "Elige una categoría.",
     );
   });
+
+  it("limpia el nombre de la categoría nueva y le pone tope", () => {
+    expect(fixedExpenseSchema.parse({ ...valid, newCategory: "  Mascotas " }).newCategory).toBe(
+      "Mascotas",
+    );
+    expect(
+      errorsOf(fixedExpenseSchema, { ...valid, newCategory: "x".repeat(41) }).newCategory,
+    ).toMatch(/máximo 40/);
+  });
 });
 
 describe("tarjeta", () => {
-  const valid = { statementDay: "15", paymentDay: "30", monthlyRate: "", debt: "1.350.000" };
+  const valid = { statementDay: "15", paymentDay: "30", monthlyRate: "" };
 
   it("sin tasa escrita queda en null, para aplicar el 3 % estimado", () => {
     expect(cardSchema.parse(valid)).toEqual({
       statementDay: 15,
       paymentDay: 30,
       monthlyRate: null,
-      debt: 1_350_000,
     });
   });
 
@@ -146,16 +157,12 @@ describe("tarjeta", () => {
       expect(errorsOf(cardSchema, { ...valid, monthlyRate }).monthlyRate).toMatch(/entre 0 y 15/);
     }
   });
-
-  it("no deber nada es válido", () => {
-    expect(cardSchema.parse({ ...valid, debt: "" }).debt).toBe(0);
-  });
 });
 
-describe("cuota en curso", () => {
+describe("lo que se debe en la tarjeta", () => {
   const valid = { principal: "960.000", name: "Avance", kind: "advance", installmentsCount: "8" };
 
-  it("acepta una válida", () => {
+  it("acepta una compra o un avance con sus cuotas", () => {
     expect(planSchema.parse(valid)).toEqual({
       principal: 960_000,
       name: "Avance",
@@ -169,43 +176,109 @@ describe("cuota en curso", () => {
       expect(errorsOf(planSchema, { ...valid, installmentsCount }).installmentsCount).toBeDefined();
     }
   });
+
+  it("un plan mensual no pide cuotas: queda con 1", () => {
+    expect(
+      planSchema.parse({
+        principal: "25.000",
+        name: "Música",
+        kind: "subscription",
+        installmentsCount: "",
+      }),
+    ).toEqual({ principal: 25_000, name: "Música", kind: "subscription", installmentsCount: 1 });
+  });
+
+  it("rechaza un tipo inventado", () => {
+    expect(errorsOf(planSchema, { ...valid, kind: "regalo" }).kind).toBeDefined();
+  });
 });
 
 describe("deuda", () => {
-  const valid = {
+  const monthly = {
     originalAmount: "900.000",
     name: "Préstamo de mi mamá",
+    paymentType: "monthly",
+    dueDate: "",
     installmentAmount: "150.000",
     paymentDay: "30",
     installmentsRemaining: "6",
   };
+  const single = {
+    ...monthly,
+    paymentType: "single",
+    dueDate: "2026-12-20",
+    installmentAmount: "",
+    paymentDay: "",
+    installmentsRemaining: "",
+  };
 
-  it("acepta una válida", () => {
-    expect(debtSchema.parse(valid)).toMatchObject({
+  it("por cuotas: guarda cuota, día y cuotas que faltan", () => {
+    expect(debtSchema.parse(monthly)).toEqual({
       originalAmount: 900_000,
+      name: "Préstamo de mi mamá",
+      paymentType: "monthly",
+      dueDate: null,
       installmentAmount: 150_000,
       paymentDay: 30,
       installmentsRemaining: 6,
     });
   });
 
-  it("la cuota no puede ser mayor que la deuda", () => {
-    expect(errorsOf(debtSchema, { ...valid, installmentAmount: "950.000" }).installmentAmount).toBe(
-      "La cuota no puede ser mayor que lo que debes.",
+  it("por cuotas: exige cuota, cuotas que faltan y día", () => {
+    expect(errorsOf(debtSchema, { ...monthly, installmentAmount: "" }).installmentAmount).toBe(
+      "Escribe el valor de la cuota.",
     );
+    expect(
+      errorsOf(debtSchema, { ...monthly, installmentsRemaining: "" }).installmentsRemaining,
+    ).toMatch(/cuántas cuotas faltan/);
+    expect(errorsOf(debtSchema, { ...monthly, paymentDay: "" }).paymentDay).toBe(
+      "Elige el día de pago.",
+    );
+  });
+
+  it("por cuotas: la cuota no puede ser mayor que la deuda", () => {
+    expect(
+      errorsOf(debtSchema, { ...monthly, installmentAmount: "950.000" }).installmentAmount,
+    ).toBe("La cuota no puede ser mayor que lo que debes.");
+  });
+
+  it("de una vez: solo pide la fecha, y queda como una cuota por el total", () => {
+    expect(debtSchema.parse(single)).toEqual({
+      originalAmount: 900_000,
+      name: "Préstamo de mi mamá",
+      paymentType: "single",
+      dueDate: { year: 2026, month: 12, day: 20 },
+      installmentAmount: 900_000,
+      paymentDay: 20,
+      installmentsRemaining: 1,
+    });
+  });
+
+  it("de una vez: exige una fecha que exista", () => {
+    for (const dueDate of ["", "2026-02-30", "20/12/2026"]) {
+      expect(errorsOf(debtSchema, { ...single, dueDate }).dueDate).toBe(
+        "Elige la fecha en que la pagas.",
+      );
+    }
   });
 });
 
 describe("meta", () => {
-  it("acepta una válida", () => {
+  it("acepta una válida, con fecha completa", () => {
     expect(
-      goalSchema.parse({ targetAmount: "3.000.000", name: "Viaje", targetMonth: "2027-12" }),
-    ).toEqual({ targetAmount: 3_000_000, name: "Viaje", targetMonth: { year: 2027, month: 12 } });
+      goalSchema.parse({ targetAmount: "3.000.000", name: "Viaje", targetDate: "2027-12-15" }),
+    ).toEqual({
+      targetAmount: 3_000_000,
+      name: "Viaje",
+      targetDate: { year: 2027, month: 12, day: 15 },
+    });
   });
 
-  it("exige una fecha con forma de año y mes", () => {
-    expect(
-      errorsOf(goalSchema, { targetAmount: "1", name: "Viaje", targetMonth: "" }).targetMonth,
-    ).toBe("Elige para cuándo la quieres.");
+  it("exige una fecha que exista", () => {
+    for (const targetDate of ["", "2027-12", "2027-02-30"]) {
+      expect(
+        errorsOf(goalSchema, { targetAmount: "1", name: "Viaje", targetDate }).targetDate,
+      ).toBe("Elige para cuándo la quieres.");
+    }
   });
 });

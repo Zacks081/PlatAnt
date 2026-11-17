@@ -4,6 +4,7 @@ import { Suspense } from "react";
 
 import { DebtForm } from "@/components/onboarding/forms";
 import { DeleteButton, ItemHeader, Screen, ScreenFallback } from "@/components/onboarding/screen";
+import { todayInTimeZone } from "@/lib/dates";
 import { getDebts, openStep } from "@/lib/onboarding/data";
 import { stepPath } from "@/lib/onboarding/steps";
 
@@ -23,7 +24,7 @@ export default function DebtPage({ params }: Props) {
 
 async function Debt({ params }: Props) {
   const { id } = await params;
-  const { db } = await openStep(5);
+  const { user, db } = await openStep(5);
   const debts = await getDebts(db);
 
   const isNew = id === "nueva";
@@ -38,11 +39,15 @@ async function Debt({ params }: Props) {
         action={debt && <DeleteButton action={deleteDebt.bind(null, debt.id)} />}
       />
       <DebtForm
+        key={debt?.id ?? "nueva"}
         action={saveDebt.bind(null, debt?.id ?? null)}
+        today={todayInTimeZone(user.timeZone)}
         initial={
           debt && {
             originalAmount: debt.original_amount,
             name: debt.name,
+            paymentType: debt.payment_type,
+            dueDate: debt.due_date,
             installmentAmount: debt.installment_amount,
             paymentDay: debt.payment_day,
             installmentsRemaining: debt.installments_remaining,

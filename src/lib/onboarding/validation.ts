@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { parseYearMonth } from "@/lib/dates";
+import { parseIsoDate } from "@/lib/dates";
 import { MAX_AMOUNT, parseMoneyInput } from "@/lib/money-input";
 
 /**
@@ -92,10 +92,19 @@ export const incomeSchema = z
 
 export const balancesSchema = z.object({ account: moneyOrZero, cash: moneyOrZero });
 
+/** Fecha elegida en el selector, como «2027-12-15». */
+const isoDate = (message: string) =>
+  z
+    .string()
+    .transform((text) => parseIsoDate(text))
+    .pipe(z.object({ year: z.number(), month: z.number(), day: z.number() }, { error: message }));
+
 export const fixedExpenseSchema = z.object({
   amount: money("Escribe cuánto pagas."),
   name: name("Ponle un nombre al gasto."),
   categoryId: z.uuid("Elige una categoría."),
+  /** Solo cuenta si la categoría elegida es «Otros»: crea una categoría con ese nombre. */
+  newCategory: z.string().trim().max(40, "Puede tener máximo 40 caracteres."),
   dueDay: dayOfMonth("Elige el día de pago."),
   split: z.enum(["first", "second", "half"], { error: "Elige de qué quincena sale." }),
 });
@@ -119,36 +128,96 @@ export const cardSchema = z.object({
   statementDay: dayOfMonth("Elige el día de corte."),
   paymentDay: dayOfMonth("Elige el día de pago."),
   monthlyRate: optionalRate,
-  debt: moneyOrZero,
 });
 
-export const planSchema = z.object({
-  principal: money("Escribe cuánto falta por pagar."),
-  name: name("Ponle un nombre."),
-  kind: z.enum(["purchase", "advance"], { error: "Elige si es compra o avance." }),
-  installmentsCount: count("Escribe cuántas cuotas faltan (1 a 120).", 120),
-});
+/**
+ * Algo que se debe o se paga con la tarjeta: una compra o un avance a cuotas, o un plan
+ * mensual (un cobro que se repite cada mes, sin fecha de fin).
+ */
+export const planSchema = z
+  .object({
+    principal: money("Escribe el valor."),
+    name: name("Ponle un nombre."),
+    kind: z.enum(["purchase", "advance", "subscription"], { error: "Elige qué fue." }),
+    // Un plan mensual no tiene cuotas.
+    installmentsCount: z.string(),
+  })
+  .transform((data, context) => {
+    if (data.kind === "subscription") return { ...data, installmentsCount: 1 };
+    const parsed = count("Escribe cuántas cuotas faltan (1 a 120).", 120).safeParse(
+      data.installmentsCount,
+    );
+    if (!parsed.success) {
+      context.addIssue({
+        code: "custom",
+        path: ["installmentsCount"],
+        message: "Escribe cuántas cuotas faltan (1 a 120).",
+      });
+      return z.NEVER;
+    }
+    return { ...data, installmentsCount: parsed.data };
+  });
 
+/** Una deuda: se paga de una vez en una fecha, o por cuotas cada mes. */
 export const debtSchema = z
   .object({
     originalAmount: money("Escribe cuánto debes."),
     name: name("Ponle un nombre a la deuda."),
-    installmentAmount: money("Escribe el valor de la cuota."),
-    paymentDay: dayOfMonth("Elige el día de pago."),
-    installmentsRemaining: count("Escribe cuántas cuotas faltan (1 a 600).", 600),
+    paymentType: z.enum(["single", "monthly"], { error: "Elige cómo la pagas." }),
+    dueDate: z.string(),
+    installmentAmount: z.string(),
+    paymentDay: z.string(),
+    installmentsRemaining: z.string(),
   })
-  .refine((debt) => debt.installmentAmount <= debt.originalAmount, {
-    path: ["installmentAmount"],
-    message: "La cuota no puede ser mayor que lo que debes.",
+  .transform((data, context) => {
+    const fail = (field: string, message: string) => {
+      context.addIssue({ code: "custom", path: [field], message });
+      return z.NEVER;
+    };
+    const base = { originalAmount: data.originalAmount, name: data.name };
+
+    if (data.paymentType === "single") {
+      const dueDate = parseIsoDate(data.dueDate);
+      if (!dueDate) return fail("dueDate", "Elige la fecha en que la pagas.");
+      // Un pago único es una sola cuota por el total, el día de su fecha.
+      return {
+        ...base,
+        paymentType: "single" as const,
+        dueDate,
+        installmentAmount: data.originalAmount,
+        paymentDay: dueDate.day,
+        installmentsRemaining: 1,
+      };
+    }
+
+    const installmentAmount = money("Escribe el valor de la cuota.").safeParse(
+      data.installmentAmount,
+    );
+    if (!installmentAmount.success) {
+      return fail("installmentAmount", "Escribe el valor de la cuota.");
+    }
+    if (installmentAmount.data > data.originalAmount) {
+      return fail("installmentAmount", "La cuota no puede ser mayor que lo que debes.");
+    }
+    const installmentsRemaining = count("", 600).safeParse(data.installmentsRemaining);
+    if (!installmentsRemaining.success) {
+      return fail("installmentsRemaining", "Escribe cuántas cuotas faltan (1 a 600).");
+    }
+    const paymentDay = dayOfMonth("").safeParse(data.paymentDay);
+    if (!paymentDay.success) return fail("paymentDay", "Elige el día de pago.");
+
+    return {
+      ...base,
+      paymentType: "monthly" as const,
+      dueDate: null,
+      installmentAmount: installmentAmount.data,
+      paymentDay: paymentDay.data,
+      installmentsRemaining: installmentsRemaining.data,
+    };
   });
 
 export const goalSchema = z.object({
   targetAmount: money("Escribe cuánto quieres juntar."),
   name: name("Ponle un nombre a la meta."),
-  targetMonth: z
-    .string()
-    .transform((text) => parseYearMonth(text))
-    .pipe(
-      z.object({ year: z.number(), month: z.number() }, { error: "Elige para cuándo la quieres." }),
-    ),
+  targetDate: isoDate("Elige para cuándo la quieres."),
 });

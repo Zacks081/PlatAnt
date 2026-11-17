@@ -71,14 +71,14 @@ isOneToOne: false
                   ]
                 },"debts": {
                   Row: {
-                    "closed_at": string | null,"created_at": string,"id": string,"installment_amount": number,"installments_remaining": number,"name": string,"original_amount": number,"payment_day": number,"updated_at": string,"user_id": string
+                    "closed_at": string | null,"created_at": string,"due_date": string | null,"id": string,"installment_amount": number,"installments_remaining": number,"name": string,"original_amount": number,"payment_day": number,"payment_type": Database["public"]['Enums']["debt_payment_type"],"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "closed_at"?: string | null,"created_at"?: string,"id"?: string,"installment_amount": number,"installments_remaining": number,"name": string,"original_amount": number,"payment_day": number,"updated_at"?: string,"user_id"?: string
+                    "closed_at"?: string | null,"created_at"?: string,"due_date"?: string | null,"id"?: string,"installment_amount": number,"installments_remaining": number,"name": string,"original_amount": number,"payment_day": number,"payment_type"?: Database["public"]['Enums']["debt_payment_type"],"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "closed_at"?: string | null,"created_at"?: string,"id"?: string,"installment_amount"?: number,"installments_remaining"?: number,"name"?: string,"original_amount"?: number,"payment_day"?: number,"updated_at"?: string,"user_id"?: string
+                    "closed_at"?: string | null,"created_at"?: string,"due_date"?: string | null,"id"?: string,"installment_amount"?: number,"installments_remaining"?: number,"name"?: string,"original_amount"?: number,"payment_day"?: number,"payment_type"?: Database["public"]['Enums']["debt_payment_type"],"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -256,7 +256,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "category_kind": "expense"|"income","expense_split": "first"|"second"|"half","installment_plan_kind": "purchase"|"advance","movement_kind": "expense"|"income"|"transfer","movement_origin": "manual"|"opening_balance"|"reconciliation"|"statement","pay_frequency": "biweekly"|"monthly","pocket_kind": "account"|"cash"|"credit_card"
+            "category_kind": "expense"|"income","debt_payment_type": "single"|"monthly","expense_split": "first"|"second"|"half","installment_plan_kind": "purchase"|"advance"|"subscription","movement_kind": "expense"|"income"|"transfer","movement_origin": "manual"|"opening_balance"|"reconciliation"|"statement","pay_frequency": "biweekly"|"monthly","pocket_kind": "account"|"cash"|"credit_card"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -376,7 +376,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "category_kind": ["expense", "income"],"expense_split": ["first", "second", "half"],"installment_plan_kind": ["purchase", "advance"],"movement_kind": ["expense", "income", "transfer"],"movement_origin": ["manual", "opening_balance", "reconciliation", "statement"],"pay_frequency": ["biweekly", "monthly"],"pocket_kind": ["account", "cash", "credit_card"]
+            "category_kind": ["expense", "income"],"debt_payment_type": ["single", "monthly"],"expense_split": ["first", "second", "half"],"installment_plan_kind": ["purchase", "advance", "subscription"],"movement_kind": ["expense", "income", "transfer"],"movement_origin": ["manual", "opening_balance", "reconciliation", "statement"],"pay_frequency": ["biweekly", "monthly"],"pocket_kind": ["account", "cash", "credit_card"]
           }
         }
 } as const

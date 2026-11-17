@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { useActionState, useState, type ReactNode } from "react";
 
 import {
+  DateRow,
   dayOptions,
   FieldCard,
   HeroMoney,
@@ -15,7 +16,7 @@ import {
 } from "@/components/forms/fields";
 import { ItemList, Note, TotalLine } from "@/components/onboarding/screen";
 import { Button } from "@/components/ui/button";
-import { parseYearMonth, type YearMonth } from "@/lib/dates";
+import { parseIsoDate, type CalendarDate } from "@/lib/dates";
 import { emptyFormState, type FormState } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
 import { goalContributionPerPayment, type PayFrequency } from "@/lib/onboarding/estimate";
@@ -108,6 +109,7 @@ export function IncomeForm({ action, submitLabel, initial }: IncomeFormProps) {
           name="payDay1"
           label={isBiweekly ? "Primer pago" : "Día de pago"}
           options={dayOptions("Día ")}
+          layout="grid"
           defaultValue={days[0]}
           error={form.errors.payDay1}
         />
@@ -117,6 +119,7 @@ export function IncomeForm({ action, submitLabel, initial }: IncomeFormProps) {
             name="payDay2"
             label="Segundo pago"
             options={dayOptions("Día ")}
+            layout="grid"
             defaultValue={days[1] || "30"}
             error={form.errors.payDay2}
           />
@@ -124,7 +127,6 @@ export function IncomeForm({ action, submitLabel, initial }: IncomeFormProps) {
           <input type="hidden" name="payDay2" value="" />
         )}
       </FieldCard>
-      <Note>Si el día cae en fin de semana o festivo, la app lo corre al día hábil anterior.</Note>
     </FormShell>
   );
 }
@@ -161,7 +163,7 @@ export function BalancesForm({ action, submitLabel, initial }: BalancesFormProps
         />
       </FieldCard>
       <TotalLine label="Tienes en total" amount={formatMoney(account + cash)} />
-      <Note>No tiene que ser exacto. Más adelante puedes cuadrar el saldo cuando quieras.</Note>
+      <Note>No tiene que ser exacto. Después puedes corregirlo cuando quieras.</Note>
     </FormShell>
   );
 }
@@ -171,13 +173,22 @@ export function BalancesForm({ action, submitLabel, initial }: BalancesFormProps
 type FixedExpenseFormProps = {
   action: Action;
   categories: Option[];
+  /** La categoría «Otros»: al elegirla se puede escribir una categoría nueva. */
+  otherCategoryId: string | null;
   /** Si se cobra por quincena, se pregunta de cuál sale. */
   askSplit: boolean;
   initial?: { amount: number; name: string; categoryId: string; dueDay: number; split: string };
 };
 
-export function FixedExpenseForm({ action, categories, askSplit, initial }: FixedExpenseFormProps) {
+export function FixedExpenseForm({
+  action,
+  categories,
+  otherCategoryId,
+  askSplit,
+  initial,
+}: FixedExpenseFormProps) {
   const form = useForm(action);
+  const [categoryId, setCategoryId] = useState(form.value("categoryId", initial?.categoryId));
 
   return (
     <FormShell form={form} submitLabel="Guardar">
@@ -201,15 +212,28 @@ export function FixedExpenseForm({ action, categories, askSplit, initial }: Fixe
           name="categoryId"
           label="Categoría"
           options={categories}
-          placeholder="Elegir"
-          defaultValue={form.value("categoryId", initial?.categoryId)}
+          defaultValue={categoryId}
+          onValueChange={setCategoryId}
           error={form.errors.categoryId}
         />
+        {otherCategoryId !== null && categoryId === otherCategoryId ? (
+          <TextRow
+            name="newCategory"
+            label="Nombre de la categoría"
+            placeholder="Mascotas, regalos…"
+            maxLength={40}
+            defaultValue={form.value("newCategory")}
+            error={form.errors.newCategory}
+          />
+        ) : (
+          <input type="hidden" name="newCategory" value="" />
+        )}
         <SelectRow
           name="dueDay"
           label="Día de pago"
-          options={dayOptions()}
-          defaultValue={form.value("dueDay", initial?.dueDay ?? 1)}
+          options={dayOptions("Día ")}
+          layout="grid"
+          defaultValue={form.value("dueDay", initial?.dueDay ?? 30)}
           error={form.errors.dueDay}
         />
         {askSplit ? (
@@ -221,17 +245,17 @@ export function FixedExpenseForm({ action, categories, askSplit, initial }: Fixe
               { value: "second", label: "Segunda quincena" },
               { value: "half", label: "Mitad y mitad" },
             ]}
-            defaultValue={form.value("split", initial?.split ?? "first")}
+            defaultValue={form.value("split", initial?.split ?? "half")}
             error={form.errors.split}
           />
         ) : (
-          <input type="hidden" name="split" value={initial?.split ?? "first"} />
+          <input type="hidden" name="split" value={initial?.split ?? "half"} />
         )}
       </FieldCard>
       {askSplit && (
         <Note>
-          «Sale de» dice de cuál pago se aparta la plata: del primero, del segundo, o la mitad de
-          cada uno.
+          Como te pagan dos veces al mes, dinos con cuál de los dos pagos cubres este gasto. Si lo
+          cubres con los dos, elige «Mitad y mitad».
         </Note>
       )}
     </FormShell>
@@ -243,13 +267,13 @@ export function FixedExpenseForm({ action, categories, askSplit, initial }: Fixe
 type CardFormProps = {
   action: Action;
   submitLabel: string;
-  initial: { statementDay: number; paymentDay: number; monthlyRate: string; debt: number };
+  initial: { statementDay: number; paymentDay: number; monthlyRate: string };
   plans: { href: string; name: string; detail: string; amount: string }[];
-  /** Explicación de lo que no está en cuotas; la calcula el servidor con lo guardado. */
-  remainderNote: string | null;
+  /** Lo que se debe en total, ya con formato; `null` si todavía no hay nada. */
+  debtTotal: string | null;
 };
 
-export function CardForm({ action, submitLabel, initial, plans, remainderNote }: CardFormProps) {
+export function CardForm({ action, submitLabel, initial, plans, debtTotal }: CardFormProps) {
   const form = useForm(action);
 
   return (
@@ -258,14 +282,16 @@ export function CardForm({ action, submitLabel, initial, plans, remainderNote }:
         <SelectRow
           name="statementDay"
           label="Día de corte"
-          options={dayOptions()}
+          options={dayOptions("Día ")}
+          layout="grid"
           defaultValue={form.value("statementDay", initial.statementDay)}
           error={form.errors.statementDay}
         />
         <SelectRow
           name="paymentDay"
           label="Día de pago"
-          options={dayOptions()}
+          options={dayOptions("Día ")}
+          layout="grid"
           defaultValue={form.value("paymentDay", initial.paymentDay)}
           error={form.errors.paymentDay}
         />
@@ -279,18 +305,12 @@ export function CardForm({ action, submitLabel, initial, plans, remainderNote }:
           defaultValue={form.value("monthlyRate", initial.monthlyRate)}
           error={form.errors.monthlyRate}
         />
-        <MoneyRow
-          name="debt"
-          label="Debes hoy"
-          defaultValue={form.value("debt", initial.debt || "")}
-          error={form.errors.debt}
-        />
       </FieldCard>
 
       <section className="flex flex-col gap-2.5">
-        <h2 className="px-1 font-display text-lg font-semibold">Cuotas en curso</h2>
+        <h2 className="px-1 font-display text-lg font-semibold">Lo que debes en la tarjeta</h2>
         <ItemList items={plans} />
-        {/* Guarda la tarjeta y abre el formulario de la cuota. */}
+        {/* Guarda la tarjeta y abre el formulario para agregar. */}
         <Button
           type="submit"
           name="intent"
@@ -300,13 +320,12 @@ export function CardForm({ action, submitLabel, initial, plans, remainderNote }:
           className="h-12 w-full"
         >
           <Plus aria-hidden="true" className="size-[18px]" />
-          Agregar cuota en curso
+          Agregar compra, avance o plan
         </Button>
       </section>
 
-      <Note>
-        {remainderNote} Si no escribes el interés, usamos 3 % y lo marcamos como estimado.
-      </Note>
+      {debtTotal && <TotalLine label="Debes en total" amount={debtTotal} />}
+      <Note>Si no sabes el interés, déjalo vacío. Mientras tanto usamos 3 %.</Note>
     </FormShell>
   );
 }
@@ -319,12 +338,13 @@ type PlanFormProps = {
 export function PlanForm({ action, initial }: PlanFormProps) {
   const form = useForm(action);
   const [kind, setKind] = useState<string>(form.value("kind", initial?.kind ?? "purchase"));
+  const isSubscription = kind === "subscription";
 
   return (
     <FormShell form={form} submitLabel="Guardar">
       <HeroMoney
         name="principal"
-        label="Lo que falta por pagar"
+        label={isSubscription ? "Valor mensual" : "Lo que falta por pagar"}
         tone="gasto"
         defaultValue={form.value("principal", initial?.principal)}
         error={form.errors.principal}
@@ -333,32 +353,42 @@ export function PlanForm({ action, initial }: PlanFormProps) {
         <TextRow
           name="name"
           label="Nombre"
-          placeholder="Celular, avance…"
+          placeholder={isSubscription ? "Música, plan de datos…" : "Celular, avance…"}
           maxLength={60}
           defaultValue={form.value("name", initial?.name)}
           error={form.errors.name}
         />
-        <SegmentedRow
+        <SelectRow
           name="kind"
           label="Fue"
-          value={kind}
-          onChange={setKind}
           options={[
             { value: "purchase", label: "Compra" },
             { value: "advance", label: "Avance" },
+            { value: "subscription", label: "Plan mensual" },
           ]}
+          defaultValue={kind}
+          onValueChange={setKind}
+          error={form.errors.kind}
         />
-        <TextRow
-          name="installmentsCount"
-          label="Cuotas que faltan"
-          placeholder="0"
-          inputMode="numeric"
-          maxLength={3}
-          defaultValue={form.value("installmentsCount", initial?.installmentsCount)}
-          error={form.errors.installmentsCount}
-        />
+        {isSubscription ? (
+          <input type="hidden" name="installmentsCount" value="" />
+        ) : (
+          <TextRow
+            name="installmentsCount"
+            label="Cuotas que faltan"
+            placeholder="0"
+            inputMode="numeric"
+            maxLength={3}
+            defaultValue={form.value("installmentsCount", initial?.installmentsCount)}
+            error={form.errors.installmentsCount}
+          />
+        )}
       </FieldCard>
-      <Note>Arriba va lo que todavía debes de esta compra o avance, no su valor original.</Note>
+      <Note>
+        {isSubscription
+          ? "Un plan mensual es algo que la tarjeta te cobra todos los meses, como una aplicación o el plan del celular."
+          : "Arriba va lo que todavía debes, no lo que costó. Si lo pagas de una sola vez, pon 1 cuota."}
+      </Note>
     </FormShell>
   );
 }
@@ -367,23 +397,32 @@ export function PlanForm({ action, initial }: PlanFormProps) {
 
 type DebtFormProps = {
   action: Action;
+  today: CalendarDate;
   initial?: {
     originalAmount: number;
     name: string;
+    paymentType: string;
+    dueDate: string | null;
     installmentAmount: number;
     paymentDay: number;
     installmentsRemaining: number;
   };
 };
 
-export function DebtForm({ action, initial }: DebtFormProps) {
+export function DebtForm({ action, today, initial }: DebtFormProps) {
   const form = useForm(action);
+  const [paymentType, setPaymentType] = useState<string>(
+    form.value("paymentType", initial?.paymentType ?? "monthly"),
+  );
+  const isSingle = paymentType === "single";
+  // Los datos de la mensualidad solo se muestran si la deuda guardada era de mensualidad.
+  const monthly = initial?.paymentType === "monthly" ? initial : undefined;
 
   return (
     <FormShell form={form} submitLabel="Guardar">
       <HeroMoney
         name="originalAmount"
-        label="Lo que debes hoy"
+        label="Total que debes"
         tone="gasto"
         defaultValue={form.value("originalAmount", initial?.originalAmount)}
         error={form.errors.originalAmount}
@@ -392,69 +431,89 @@ export function DebtForm({ action, initial }: DebtFormProps) {
         <TextRow
           name="name"
           label="Nombre"
-          placeholder="Préstamo, moto…"
+          placeholder="Préstamo, crédito del banco…"
           maxLength={60}
           defaultValue={form.value("name", initial?.name)}
           error={form.errors.name}
         />
-        <MoneyRow
-          name="installmentAmount"
-          label="Cuota mensual"
-          defaultValue={form.value("installmentAmount", initial?.installmentAmount)}
-          error={form.errors.installmentAmount}
+        <SegmentedRow
+          name="paymentType"
+          label="La pagas"
+          value={paymentType}
+          onChange={setPaymentType}
+          options={[
+            { value: "single", label: "De una vez" },
+            { value: "monthly", label: "Por cuotas" },
+          ]}
         />
-        <SelectRow
-          name="paymentDay"
-          label="Día de pago"
-          options={dayOptions()}
-          defaultValue={form.value("paymentDay", initial?.paymentDay ?? 30)}
-          error={form.errors.paymentDay}
-        />
-        <TextRow
-          name="installmentsRemaining"
-          label="Cuotas que faltan"
-          placeholder="0"
-          inputMode="numeric"
-          maxLength={3}
-          defaultValue={form.value("installmentsRemaining", initial?.installmentsRemaining)}
-          error={form.errors.installmentsRemaining}
-        />
+        {isSingle ? (
+          <>
+            <DateRow
+              name="dueDate"
+              label="Fecha de pago"
+              min={today}
+              defaultValue={form.value("dueDate", initial?.dueDate)}
+              error={form.errors.dueDate}
+            />
+            <input type="hidden" name="installmentAmount" value="" />
+            <input type="hidden" name="paymentDay" value="" />
+            <input type="hidden" name="installmentsRemaining" value="" />
+          </>
+        ) : (
+          <>
+            <MoneyRow
+              name="installmentAmount"
+              label="Cuota mensual"
+              defaultValue={form.value("installmentAmount", monthly?.installmentAmount)}
+              error={form.errors.installmentAmount}
+            />
+            <TextRow
+              name="installmentsRemaining"
+              label="Cuotas que faltan"
+              placeholder="0"
+              inputMode="numeric"
+              maxLength={3}
+              defaultValue={form.value("installmentsRemaining", monthly?.installmentsRemaining)}
+              error={form.errors.installmentsRemaining}
+            />
+            <SelectRow
+              name="paymentDay"
+              label="Día de pago"
+              options={dayOptions("Día ")}
+              layout="grid"
+              defaultValue={form.value("paymentDay", monthly?.paymentDay ?? 30)}
+              error={form.errors.paymentDay}
+            />
+            <input type="hidden" name="dueDate" value="" />
+          </>
+        )}
       </FieldCard>
     </FormShell>
   );
 }
 
-// --- Paso 6: meta -----------------------------------------------------------
+// --- Paso 6: una meta -------------------------------------------------------
 
 type GoalFormProps = {
   action: Action;
-  submitLabel: string;
-  monthOptions: Option[];
-  today: YearMonth;
+  today: CalendarDate;
   payFrequency: PayFrequency;
-  initial?: { targetAmount: number; name: string; targetMonth: string };
+  initial?: { targetAmount: number; name: string; targetDate: string };
 };
 
-export function GoalForm({
-  action,
-  submitLabel,
-  monthOptions,
-  today,
-  payFrequency,
-  initial,
-}: GoalFormProps) {
+export function GoalForm({ action, today, payFrequency, initial }: GoalFormProps) {
   const form = useForm(action);
   const [amount, setAmount] = useState<number | null>(initial?.targetAmount ?? null);
-  const [month, setMonth] = useState<string>(form.value("targetMonth", initial?.targetMonth));
+  const [date, setDate] = useState<string>(form.value("targetDate", initial?.targetDate));
 
-  const target = parseYearMonth(month);
+  const target = parseIsoDate(date);
   const perPayment =
     amount && target
       ? goalContributionPerPayment({ targetAmount: amount, target, today, payFrequency })
       : null;
 
   return (
-    <FormShell form={form} submitLabel={submitLabel}>
+    <FormShell form={form} submitLabel="Guardar">
       <HeroMoney
         name="targetAmount"
         label="Valor de la meta"
@@ -472,14 +531,13 @@ export function GoalForm({
           defaultValue={form.value("name", initial?.name)}
           error={form.errors.name}
         />
-        <SelectRow
-          name="targetMonth"
+        <DateRow
+          name="targetDate"
           label="Para cuándo"
-          options={monthOptions}
-          placeholder="Elegir"
-          defaultValue={month}
-          onValueChange={setMonth}
-          error={form.errors.targetMonth}
+          min={today}
+          defaultValue={date}
+          onValueChange={setDate}
+          error={form.errors.targetDate}
         />
       </FieldCard>
       {perPayment !== null && (

@@ -30,6 +30,7 @@ async function Balances() {
         description="Mira la app de tu banco y lo que tengas en la billetera."
       />
       <BalancesForm
+        key={`${balances.account}-${balances.cash}`}
         action={saveBalances}
         submitLabel={submitLabel(user)}
         initial={{ account: balances.account, cash: balances.cash }}

@@ -41,8 +41,10 @@ async function FixedExpense({ params }: Props) {
         action={expense && <DeleteButton action={deleteFixedExpense.bind(null, expense.id)} />}
       />
       <FixedExpenseForm
+        key={expense?.id ?? "nuevo"}
         action={saveFixedExpense.bind(null, expense?.id ?? null)}
         categories={categories.map((category) => ({ value: category.id, label: category.name }))}
+        otherCategoryId={categories.find((category) => category.name === "Otros")?.id ?? null}
         askSplit={user.payFrequency === "biweekly"}
         initial={
           expense && {

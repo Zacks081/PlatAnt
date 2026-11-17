@@ -5,14 +5,7 @@ import { Suspense, type ReactNode } from "react";
 
 import { BackLink, Screen, ScreenFallback } from "@/components/onboarding/screen";
 import { requireOnboardedUser } from "@/lib/auth/session";
-import {
-  getCard,
-  getDebts,
-  getFixedExpenses,
-  getGoal,
-  yearMonthOfDate,
-} from "@/lib/onboarding/data";
-import { monthLabel } from "@/lib/onboarding/labels";
+import { getCard, getDebts, getFixedExpenses, getGoals } from "@/lib/onboarding/data";
 import { stepPath, type StepNumber } from "@/lib/onboarding/steps";
 import { createClient } from "@/lib/supabase/server";
 
@@ -59,11 +52,11 @@ function StepLink({ step, label, value }: { step: StepNumber; label: string; val
 async function Settings() {
   const user = await requireOnboardedUser();
   const db = await createClient();
-  const [fixedExpenses, card, debts, goal] = await Promise.all([
+  const [fixedExpenses, card, debts, goals] = await Promise.all([
     getFixedExpenses(db),
     getCard(db),
     getDebts(db),
-    getGoal(db),
+    getGoals(db),
   ]);
   const count = (items: unknown[]) => (items.length > 0 ? String(items.length) : "Ninguno");
 
@@ -94,8 +87,8 @@ async function Settings() {
         />
         <StepLink
           step={6}
-          label="Meta"
-          value={goal ? monthLabel(yearMonthOfDate(goal.target_date)) : "Sin meta"}
+          label="Metas"
+          value={goals.length > 0 ? String(goals.length) : "Ninguna"}
         />
       </Group>
 

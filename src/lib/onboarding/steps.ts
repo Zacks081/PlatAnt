@@ -55,9 +55,12 @@ export function pathAfterStep(step: StepNumber, progress: Progress): string {
   return stepPath((step + 1) as StepNumber);
 }
 
-/** A dónde lleva la flecha de volver de un paso. */
+/**
+ * A dónde lleva la flecha de volver de un paso: siempre al paso anterior, para que nunca
+ * se arme un ciclo. Quien ya pasó por el resumen vuelve a él desde el primer paso.
+ */
 export function pathBeforeStep(step: StepNumber, progress: Progress): string | null {
   if (progress.onboardingCompleted) return SETTINGS_PATH;
-  if (progress.onboardingStep >= LAST_STEP) return SUMMARY_PATH;
-  return step > 1 ? stepPath((step - 1) as StepNumber) : null;
+  if (step > 1) return stepPath((step - 1) as StepNumber);
+  return progress.onboardingStep >= LAST_STEP ? SUMMARY_PATH : null;
 }

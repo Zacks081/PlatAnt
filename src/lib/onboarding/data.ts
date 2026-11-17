@@ -3,7 +3,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 
 import { getCurrentUser, type CurrentUser } from "@/lib/auth/session";
-import { parseYearMonth, todayInTimeZone, type YearMonth } from "@/lib/dates";
+import { monthsBetween, parseYearMonth, todayInTimeZone, type YearMonth } from "@/lib/dates";
 import {
   estimateFreeMoney,
   goalContributionPerPayment,
@@ -51,15 +51,20 @@ export async function openStep(step: StepNumber): Promise<{ user: CurrentUser; d
 }
 
 export async function getCategories(db: Supabase, kind: "expense" | "income") {
-  return many(
+  const categories = many(
     await db
       .from("categories")
       .select("id, name")
       .eq("kind", kind)
       .is("archived_at", null)
-      .order("created_at")
       .order("name"),
   );
+  // En orden alfabético, con «Otros» al final.
+  const isOther = (name: string) => name === "Otros" || name === "Otros ingresos";
+  return [
+    ...categories.filter((category) => !isOther(category.name)),
+    ...categories.filter((category) => isOther(category.name)),
+  ];
 }
 
 /** Saldo inicial de cada bolsillo (0 si no tiene). */
@@ -111,23 +116,30 @@ export async function getDebts(db: Supabase) {
   return many(
     await db
       .from("debts")
-      .select("id, name, original_amount, installment_amount, payment_day, installments_remaining")
+      .select(
+        "id, name, original_amount, installment_amount, payment_day, installments_remaining, payment_type, due_date",
+      )
       .is("closed_at", null)
       .order("created_at"),
   );
 }
 
-/** La meta del recorrido: la más antigua sin cumplir. */
-export async function getGoal(db: Supabase) {
-  return oneOrNone(
+/** Las metas sin cumplir, de la más antigua a la más nueva. */
+export async function getGoals(db: Supabase) {
+  return many(
     await db
       .from("goals")
       .select("id, name, target_amount, target_date")
       .is("achieved_at", null)
-      .order("created_at")
-      .limit(1)
-      .maybeSingle(),
+      .order("created_at"),
   );
+}
+
+/** Lo que se debe en la tarjeta: la suma de compras y avances. Los planes mensuales no son deuda. */
+export function cardDebt(plans: readonly { kind: string; principal: number }[]): number {
+  return plans
+    .filter((plan) => plan.kind !== "subscription")
+    .reduce((total, plan) => total + plan.principal, 0);
 }
 
 /** «2027-12-31» → { year: 2027, month: 12 } */
@@ -141,38 +153,50 @@ export type Summary = {
   fixedExpenses: Awaited<ReturnType<typeof getFixedExpenses>>;
   card: Awaited<ReturnType<typeof getCard>>;
   debts: Awaited<ReturnType<typeof getDebts>>;
-  goal: Awaited<ReturnType<typeof getGoal>>;
+  goals: Awaited<ReturnType<typeof getGoals>>;
   goalPerPayment: number;
 };
 
 /** Todo lo registrado, con el estimado de plata libre ya calculado. */
 export async function getSummary(db: Supabase, user: CurrentUser): Promise<Summary> {
-  const [balances, fixedExpenses, card, debts, goal] = await Promise.all([
+  const [balances, fixedExpenses, card, debts, goals] = await Promise.all([
     getOpeningBalances(db),
     getFixedExpenses(db),
     getCard(db),
     getDebts(db),
-    getGoal(db),
+    getGoals(db),
   ]);
+  const today = todayInTimeZone(user.timeZone);
 
-  const goalPerPayment = goal
-    ? goalContributionPerPayment({
+  // El aporte por pago es la suma de lo que pide cada meta.
+  const goalPerPayment = goals.reduce(
+    (total, goal) =>
+      total +
+      goalContributionPerPayment({
         targetAmount: goal.target_amount,
         target: yearMonthOfDate(goal.target_date),
-        today: todayInTimeZone(user.timeZone),
+        today,
         payFrequency: user.payFrequency,
-      })
-    : 0;
+      }),
+    0,
+  );
 
   const estimate = estimateFreeMoney({
     monthlyIncome: user.monthlyIncome ?? 0,
     payFrequency: user.payFrequency,
     payDays: user.payDays,
     fixedExpenses,
-    debts: debts.map((debt) => ({
-      installmentAmount: debt.installment_amount,
-      paymentDay: debt.payment_day,
-    })),
+    // Las mensualidades cuentan cada mes; un pago único, solo en el mes en que se paga.
+    debts: debts
+      .filter(
+        (debt) =>
+          debt.payment_type === "monthly" ||
+          (debt.due_date !== null && monthsBetween(today, yearMonthOfDate(debt.due_date)) === 0),
+      )
+      .map((debt) => ({
+        installmentAmount: debt.installment_amount,
+        paymentDay: debt.payment_day,
+      })),
     card: card
       ? {
           paymentDay: card.payment_day,
@@ -185,5 +209,5 @@ export async function getSummary(db: Supabase, user: CurrentUser): Promise<Summa
     goalPerPayment,
   });
 
-  return { estimate, balances, fixedExpenses, card, debts, goal, goalPerPayment };
+  return { estimate, balances, fixedExpenses, card, debts, goals, goalPerPayment };
 }

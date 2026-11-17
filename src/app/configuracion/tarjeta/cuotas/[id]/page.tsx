@@ -9,7 +9,7 @@ import { stepPath } from "@/lib/onboarding/steps";
 
 import { deletePlan, savePlan } from "../../../actions";
 
-export const metadata: Metadata = { title: "Cuota en curso" };
+export const metadata: Metadata = { title: "Tarjeta de crédito" };
 
 type Props = Pick<PageProps<"/configuracion/tarjeta/cuotas/[id]">, "params">;
 
@@ -36,10 +36,11 @@ async function Plan({ params }: Props) {
     <Screen>
       <ItemHeader
         backHref={stepPath(4)}
-        title={plan ? "Cuota en curso" : "Nueva cuota en curso"}
+        title={plan ? "En la tarjeta" : "Agregar a la tarjeta"}
         action={plan && <DeleteButton action={deletePlan.bind(null, plan.id)} />}
       />
       <PlanForm
+        key={plan?.id ?? "nueva"}
         action={savePlan.bind(null, plan?.id ?? null)}
         initial={
           plan && {

@@ -96,8 +96,8 @@ async function Summary() {
       detail: !summary.card
         ? "Sin registrar"
         : estimate.card > 0
-          ? `Cuotas de ${money(estimate.card)} al mes`
-          : "Sin cuotas en curso",
+          ? `Pagas ${money(estimate.card)} al mes`
+          : "Sin nada pendiente",
       amount: money(summary.balances.credit_card),
     },
     {
@@ -108,9 +108,12 @@ async function Summary() {
     },
     {
       step: 6,
-      label: "Meta",
-      detail: summary.goal ? `${money(estimate.goal)} al mes` : "Sin meta",
-      amount: money(summary.goal?.target_amount ?? 0),
+      label: "Metas",
+      detail:
+        summary.goals.length > 0
+          ? `${summary.goals.length === 1 ? "1 meta" : `${summary.goals.length} metas`} · ${money(estimate.goal)} al mes`
+          : "Sin metas",
+      amount: money(summary.goals.reduce((total, goal) => total + goal.target_amount, 0)),
     },
   ];
 

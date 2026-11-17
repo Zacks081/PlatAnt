@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { CardForm } from "@/components/onboarding/forms";
 import { Screen, ScreenFallback, ScreenTitle, StepHeader } from "@/components/onboarding/screen";
 import { formatMoney } from "@/lib/money";
-import { getCard, getOpeningBalances, openStep } from "@/lib/onboarding/data";
+import { cardDebt, getCard, openStep } from "@/lib/onboarding/data";
 import { installmentsLeft } from "@/lib/onboarding/labels";
 import { stepPath, submitLabel } from "@/lib/onboarding/steps";
 
@@ -22,21 +22,19 @@ export default function CardPage() {
 
 async function Card() {
   const { user, db } = await openStep(4);
-  const [card, balances] = await Promise.all([getCard(db), getOpeningBalances(db)]);
+  const card = await getCard(db);
   const money = (amount: number) => formatMoney(amount, { currency: user.currency });
-
-  const debt = balances.credit_card;
-  const inPlans = (card?.plans ?? []).reduce((sum, plan) => sum + plan.principal, 0);
-  const remainder = debt - inPlans;
+  const plans = card?.plans ?? [];
+  const debt = cardDebt(plans);
 
   return (
     <Screen>
       <StepHeader step={4} user={user} />
       <ScreenTitle title="Tu tarjeta de crédito" />
-      {/* La «key» rearma el formulario cuando cambian los datos guardados (por ejemplo, al volver
-          de agregar una cuota), para que muestre lo guardado y no lo que tenía antes. */}
+      {/* La «key» rearma el formulario cuando cambia lo guardado, para que muestre eso
+          y no lo que tenía la última vez que se abrió. */}
       <CardForm
-        key={`${debt}-${card?.plans.length ?? 0}-${card?.statement_day}-${card?.payment_day}`}
+        key={`${card?.statement_day}-${card?.payment_day}-${card?.monthly_rate}-${plans.length}-${debt}`}
         action={saveCard}
         submitLabel={submitLabel(user)}
         initial={{
@@ -45,19 +43,17 @@ async function Card() {
           // Solo se muestra la tasa si la escribió el usuario; el 3 % estimado se deja en blanco.
           monthlyRate:
             card && !card.rate_is_estimated ? String(card.monthly_rate).replace(".", ",") : "",
-          debt,
         }}
-        plans={(card?.plans ?? []).map((plan) => ({
+        plans={plans.map((plan) => ({
           href: `${stepPath(4)}/cuotas/${plan.id}`,
           name: plan.name,
-          detail: installmentsLeft(plan.installments_count),
+          detail:
+            plan.kind === "subscription"
+              ? "Plan mensual"
+              : installmentsLeft(plan.installments_count),
           amount: money(plan.principal),
         }))}
-        remainderNote={
-          card && remainder > 0 && inPlans > 0
-            ? `Los otros ${money(remainder)} se pagan completos en el próximo corte.`
-            : null
-        }
+        debtTotal={debt > 0 ? money(debt) : null}
       />
     </Screen>
   );

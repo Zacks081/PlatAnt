@@ -1,59 +1,56 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-import { GoalForm } from "@/components/onboarding/forms";
+import { ListFooter } from "@/components/onboarding/list-footer";
 import {
-  DeleteButton,
+  AddLink,
+  ItemList,
   Screen,
   ScreenFallback,
   ScreenTitle,
   StepHeader,
 } from "@/components/onboarding/screen";
-import { formatYearMonth, todayInTimeZone } from "@/lib/dates";
-import { getGoal, openStep, yearMonthOfDate } from "@/lib/onboarding/data";
-import { monthOptions } from "@/lib/onboarding/labels";
-import { submitLabel } from "@/lib/onboarding/steps";
+import { parseIsoDate } from "@/lib/dates";
+import { formatMoney } from "@/lib/money";
+import { getGoals, openStep } from "@/lib/onboarding/data";
+import { formatLongDate } from "@/lib/onboarding/labels";
+import { stepPath } from "@/lib/onboarding/steps";
 
-import { deleteGoal, saveGoal } from "../actions";
+export const metadata: Metadata = { title: "Metas" };
 
-export const metadata: Metadata = { title: "Meta" };
-
-export default function GoalPage() {
+export default function GoalsPage() {
   return (
     <Suspense fallback={<ScreenFallback />}>
-      <Goal />
+      <Goals />
     </Suspense>
   );
 }
 
-async function Goal() {
+async function Goals() {
   const { user, db } = await openStep(6);
-  const goal = await getGoal(db);
-  const today = todayInTimeZone(user.timeZone);
+  const goals = await getGoals(db);
+  const money = (amount: number) => formatMoney(amount, { currency: user.currency });
 
   return (
     <Screen>
       <StepHeader step={6} user={user} />
-      <div className="flex items-start justify-between gap-3">
-        <ScreenTitle title="¿Para qué quieres ahorrar?" description="Una meta con valor y fecha." />
-        {goal && <DeleteButton action={deleteGoal} />}
-      </div>
-      <GoalForm
-        action={saveGoal}
-        submitLabel={submitLabel(user)}
-        monthOptions={monthOptions(today)}
-        today={{ year: today.year, month: today.month }}
-        payFrequency={user.payFrequency}
-        initial={
-          goal
-            ? {
-                targetAmount: goal.target_amount,
-                name: goal.name,
-                targetMonth: formatYearMonth(yearMonthOfDate(goal.target_date)),
-              }
-            : undefined
-        }
+      <ScreenTitle
+        title="¿Para qué quieres ahorrar?"
+        description="Cada meta lleva un valor y una fecha."
       />
+      <ItemList
+        items={goals.map((goal) => {
+          const date = parseIsoDate(goal.target_date);
+          return {
+            href: `${stepPath(6)}/${goal.id}`,
+            name: goal.name,
+            detail: date ? `Para el ${formatLongDate(date)}` : "",
+            amount: money(goal.target_amount),
+          };
+        })}
+      />
+      <AddLink href={`${stepPath(6)}/nueva`}>Agregar meta</AddLink>
+      <ListFooter step={6} user={user} />
     </Screen>
   );
 }

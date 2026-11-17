@@ -29,6 +29,7 @@ async function Income() {
         description="Un promedio está bien. Lo puedes cambiar después."
       />
       <IncomeForm
+        key={`${user.monthlyIncome}-${user.payFrequency}-${user.payDays.join("-")}`}
         action={saveIncome}
         submitLabel={submitLabel(user)}
         initial={{

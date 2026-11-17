@@ -56,3 +56,21 @@ export function addMonths({ year, month }: YearMonth, count: number): YearMonth 
   const index = year * 12 + (month - 1) + count;
   return { year: Math.floor(index / 12), month: (index % 12) + 1 };
 }
+
+/** «2027-12-15» → fecha. Devuelve `null` si no tiene esa forma o el día no existe (30 de febrero). */
+export function parseIsoDate(text: string): CalendarDate | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (!match) return null;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth({ year, month })) return null;
+  return { year, month, day };
+}
+
+export function formatIsoDate({ year, month, day }: CalendarDate): string {
+  return `${formatYearMonth({ year, month })}-${String(day).padStart(2, "0")}`;
+}
+
+/** Negativo si `a` es antes que `b`, cero si son el mismo día, positivo si es después. */
+export function compareDates(a: CalendarDate, b: CalendarDate): number {
+  return a.year - b.year || a.month - b.month || a.day - b.day;
+}

@@ -549,3 +549,75 @@ describe("recorridos", () => {
     }
   });
 });
+
+describe("ajustes de la configuración inicial", () => {
+  it("cada usuario puede crear sus categorías, y solo las ve él", async () => {
+    const created = ok(
+      await ana.client
+        .from("categories")
+        .insert({ name: "Mascotas", kind: "expense" })
+        .select("id, user_id, is_system")
+        .single(),
+    );
+    expect(created).toMatchObject({ user_id: ana.id, is_system: false });
+
+    const seenByBeto = await beto.client.from("categories").select("id").eq("id", created.id);
+    expect(seenByBeto.data).toEqual([]);
+  });
+
+  it("no puede crear una categoría del sistema ni a nombre de otro", async () => {
+    const system = await ana.client
+      .from("categories")
+      .insert({ name: "Falsa", kind: "expense", is_system: true } as never);
+    const forOther = await beto.client
+      .from("categories")
+      .insert({ name: "Ajena", kind: "expense", user_id: ana.id } as never);
+    expect(system.error?.code).toBe("42501");
+    expect(forOther.error?.code).toBe("42501");
+  });
+
+  it("no puede repetir una categoría", async () => {
+    const { error } = await ana.client
+      .from("categories")
+      .insert({ name: "Comida", kind: "expense" });
+    expect(error?.code).toBe("23505");
+  });
+
+  it("la tarjeta acepta un plan mensual", async () => {
+    const { error } = await ana.client.from("installment_plans").insert({
+      credit_card_id: anaRows.credit_cards,
+      kind: "subscription",
+      name: "Música",
+      principal: 25_000,
+      installments_count: 1,
+      is_initial: true,
+    });
+    expect(error).toBeNull();
+  });
+
+  it("una deuda de pago único exige fecha", async () => {
+    const base = {
+      name: "Pago único",
+      original_amount: 500_000,
+      installment_amount: 500_000,
+      payment_day: 20,
+      installments_remaining: 1,
+      payment_type: "single" as const,
+    };
+    const withoutDate = await ana.client.from("debts").insert(base);
+    const withDate = await ana.client.from("debts").insert({ ...base, due_date: "2026-12-20" });
+    expect(withoutDate.error?.code).toBe("23514");
+    expect(withDate.error).toBeNull();
+  });
+
+  it("las deudas nacen como mensualidad si no se dice otra cosa", async () => {
+    const debt = ok(
+      await ana.client
+        .from("debts")
+        .select("payment_type, due_date")
+        .eq("id", anaRows.debts)
+        .single(),
+    );
+    expect(debt).toEqual({ payment_type: "monthly", due_date: null });
+  });
+});
