@@ -245,11 +245,15 @@ describe("una fila propia no puede apuntar a filas de otro", () => {
   });
 
   it("un movimiento no puede entrar al bolsillo de otro usuario", async () => {
+    const betoSalary = ok(
+      await beto.client.from("categories").select("id").eq("name", "Salario").single(),
+    ).id;
     const { error } = await beto.client.from("movements").insert({
       kind: "income",
       amount: 1_000,
       occurred_on: "2026-11-16",
       pocket_id: anaRows.pockets,
+      category_id: betoSalary,
     });
     expect(error?.code).toBe("23503");
   });
@@ -478,17 +482,13 @@ describe("reglas de los datos", () => {
     expect(error).toBeNull();
   });
 
-  it("las categorías y los bolsillos no se pueden cambiar ni borrar desde la app", async () => {
-    const rename = await ana.client
-      .from("categories")
-      .update({ name: "Otra" })
-      .eq("id", anaRows.categories);
+  it("las categorías y los bolsillos no se pueden borrar desde la app", async () => {
+    // Renombrar categorías sí se puede desde la issue 4; borrarlas, nunca.
     const removeCategory = await ana.client
       .from("categories")
       .delete()
       .eq("id", anaRows.categories);
     const removePocket = await ana.client.from("pockets").delete().eq("id", anaRows.pockets);
-    expect(rename.error?.code).toBe("42501");
     expect(removeCategory.error?.code).toBe("42501");
     expect(removePocket.error?.code).toBe("42501");
   });

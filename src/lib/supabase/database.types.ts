@@ -25,14 +25,14 @@ export type Database = {
           Tables: {
             "categories": {
                   Row: {
-                    "archived_at": string | null,"created_at": string,"id": string,"is_system": boolean,"kind": Database["public"]['Enums']["category_kind"],"name": string,"user_id": string
+                    "archived_at": string | null,"created_at": string,"icon": string,"id": string,"is_ant": boolean,"is_system": boolean,"kind": Database["public"]['Enums']["category_kind"],"name": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "archived_at"?: string | null,"created_at"?: string,"id"?: string,"is_system"?: boolean,"kind": Database["public"]['Enums']["category_kind"],"name": string,"user_id"?: string
+                    "archived_at"?: string | null,"created_at"?: string,"icon"?: string,"id"?: string,"is_ant"?: boolean,"is_system"?: boolean,"kind": Database["public"]['Enums']["category_kind"],"name": string,"user_id"?: string
                   }
                   Update: {
-                    "archived_at"?: string | null,"created_at"?: string,"id"?: string,"is_system"?: boolean,"kind"?: Database["public"]['Enums']["category_kind"],"name"?: string,"user_id"?: string
+                    "archived_at"?: string | null,"created_at"?: string,"icon"?: string,"id"?: string,"is_ant"?: boolean,"is_system"?: boolean,"kind"?: Database["public"]['Enums']["category_kind"],"name"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -245,7 +245,12 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "save_credit_card":
+            "pocket_balances":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "balance": number,"kind": Database["public"]['Enums']["pocket_kind"],"name": string,"pocket_id": string
+            }[]
+                           },
+"save_credit_card":
 { Args: { "p_debt": number,"p_monthly_rate": number,"p_payment_day": number,"p_rate_is_estimated": boolean,"p_statement_day": number }; Returns: string
                            },
 "seed_user_defaults":

@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Instrument_Sans } from "next/font/google";
+import { Suspense } from "react";
 
+import { Toast } from "@/components/app/toast";
 import { appConfig } from "@/config/app";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +51,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       // "dark" va siempre: la app solo tiene tema oscuro por ahora.
       className={cn("dark h-full antialiased", displayFont.variable, bodyFont.variable)}
     >
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        {children}
+        {/* El aviso depende de la dirección actual: va aparte para no frenar la página. */}
+        <Suspense fallback={null}>
+          <Toast />
+        </Suspense>
+      </body>
     </html>
   );
 }

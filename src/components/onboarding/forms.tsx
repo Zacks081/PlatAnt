@@ -483,6 +483,7 @@ export function DebtForm({ action, today, askSplit, initial }: DebtFormProps) {
               name="dueDate"
               label="Fecha de pago"
               min={today}
+              max={{ year: today.year + 10, month: 12, day: 31 }}
               defaultValue={form.value("dueDate", initial?.dueDate)}
               error={form.errors.dueDate}
             />
@@ -569,6 +570,7 @@ export function GoalForm({ action, today, payFrequency, initial }: GoalFormProps
           name="targetDate"
           label="Para cuándo"
           min={today}
+          max={{ year: today.year + 10, month: 12, day: 31 }}
           defaultValue={date}
           onValueChange={setDate}
           error={form.errors.targetDate}
