@@ -6,6 +6,7 @@ import {
   DateRow,
   FieldCard,
   HeroMoney,
+  MoneyRow,
   SelectRow,
   TextRow,
   type Option,
@@ -154,7 +155,7 @@ type TransferFormProps = {
   direction: "withdrawal" | "deposit";
   today: CalendarDate;
   minDate: CalendarDate;
-  initial: { amount?: number; date: string; description?: string };
+  initial: { amount?: number; date: string; description?: string; fee?: number | null };
   autoFocus: boolean;
 };
 
@@ -192,6 +193,14 @@ export function TransferForm({
           <span className="text-muted-foreground">Entra a</span>
           <span className="font-semibold">{to}</span>
         </div>
+        {direction === "withdrawal" && (
+          <MoneyRow
+            name="fee"
+            label="Costo del retiro"
+            defaultValue={value("fee", initial.fee ?? "")}
+            error={errors.fee}
+          />
+        )}
         <DateRow
           name="date"
           label="Fecha"
@@ -211,7 +220,7 @@ export function TransferForm({
       </FieldCard>
       <p className="px-1 text-[13px] text-muted-foreground">
         {direction === "withdrawal"
-          ? "Un retiro no es un gasto: la plata solo pasa de tu cuenta a tu billetera."
+          ? "Un retiro no es un gasto: la plata solo pasa de tu cuenta a tu billetera. Si el cajero te cobró, escribe el costo: ese sí se guarda como gasto."
           : "Una consignación no es un ingreso: la plata solo pasa de tu billetera a tu cuenta."}
       </p>
 

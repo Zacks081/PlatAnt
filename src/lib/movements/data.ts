@@ -66,7 +66,7 @@ export async function getCategories(
 }
 
 const MOVEMENT_FIELDS =
-  "id, kind, amount, occurred_on, description, category_id, pocket_id, to_pocket_id, categories(name, icon), pockets!movements_user_id_pocket_id_fkey(kind, name), to_pocket:pockets!movements_user_id_to_pocket_id_fkey(kind), installment_plans(installments_count)" as const;
+  "id, kind, origin, amount, occurred_on, description, category_id, pocket_id, to_pocket_id, categories(name, icon), pockets!movements_user_id_pocket_id_fkey(kind, name), to_pocket:pockets!movements_user_id_to_pocket_id_fkey(kind), installment_plans(installments_count)" as const;
 
 export type HistoryFilters = {
   /** Rango de fechas, o `null` para cualquier fecha. */
@@ -79,8 +79,11 @@ export type HistoryFilters = {
 
 const NO_FILTERS: HistoryFilters = { range: null, type: null, categoryId: null, pocketId: null };
 
+/** Lo que se ve en el historial: lo registrado a mano y los ajustes del cuadre de saldo. */
+const HISTORY_ORIGINS = ["manual", "reconciliation"] as const;
+
 /**
- * Movimientos registrados a mano, del más reciente al más antiguo, de a `limit` por página.
+ * Movimientos del historial, del más reciente al más antiguo, de a `limit` por página.
  * Devuelve también cuántos hay en total con esos filtros, para saber cuántas páginas hay.
  */
 export async function getMovementsPage(
@@ -91,7 +94,7 @@ export async function getMovementsPage(
   let query = db
     .from("movements")
     .select(MOVEMENT_FIELDS, { count: "exact" })
-    .eq("origin", "manual");
+    .in("origin", HISTORY_ORIGINS);
 
   if (filters.range) {
     query = query.gte("occurred_on", filters.range.from).lte("occurred_on", filters.range.to);
@@ -136,10 +139,20 @@ export async function getMovement(db: Db, id: string) {
     .from("movements")
     .select(MOVEMENT_FIELDS)
     .eq("id", id)
-    .eq("origin", "manual")
+    .in("origin", HISTORY_ORIGINS)
     .maybeSingle();
   if (result.error) throw new Error(`No se pudo cargar el movimiento: ${result.error.message}`);
   return result.data;
+}
+
+/** El costo de un retiro (el gasto unido a él), si lo tiene. */
+export async function getTransferFee(db: Db, transferId: string) {
+  const { data } = await db
+    .from("movements")
+    .select("amount")
+    .eq("parent_id", transferId)
+    .maybeSingle();
+  return data?.amount ?? null;
 }
 
 /** La categoría y el bolsillo del último movimiento de ese tipo, para proponerlos de nuevo. */
@@ -149,6 +162,8 @@ export async function getLastUsed(db: Db, kind: MovementKind) {
     .select("category_id, pocket_id")
     .eq("origin", "manual")
     .eq("kind", kind)
+    // El costo de un retiro no cuenta: lo guarda la app, no lo eligió la persona.
+    .is("parent_id", null)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

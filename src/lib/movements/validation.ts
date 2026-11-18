@@ -34,8 +34,30 @@ export const movementSchema = z.object({
   description: z.string().trim().max(140, "Puede tener máximo 140 caracteres."),
 });
 
-/** Retiro o consignación: solo el valor, la fecha y una nota opcional. */
-export const transferSchema = movementSchema.pick({ amount: true, date: true, description: true });
+/** Monto opcional: vacío es 0. */
+const optionalAmount = z
+  .string()
+  .transform((text) => parseMoneyInput(text) ?? 0)
+  .pipe(z.number().int().min(0).max(MAX_AMOUNT, "Ese valor es demasiado grande."));
+
+/** Retiro o consignación: el valor, la fecha, una nota opcional y, en un retiro, su costo. */
+export const transferSchema = movementSchema
+  .pick({ amount: true, date: true, description: true })
+  .extend({ fee: optionalAmount });
+
+/** Cuadre: cuánto hay de verdad (puede ser 0) y el saldo que la app mostraba al cuadrar. */
+export const reconcileSchema = z.object({
+  actual: z
+    .string()
+    .transform((text) => parseMoneyInput(text))
+    .pipe(
+      z
+        .number({ error: "Escribe cuánto tienes." })
+        .int()
+        .max(MAX_AMOUNT, "Ese valor es demasiado grande."),
+    ),
+  expected: z.coerce.number().int(),
+});
 
 export const categorySchema = z.object({
   name: z.string().trim().min(1, "Ponle un nombre.").max(40, "Puede tener máximo 40 caracteres."),
@@ -43,8 +65,14 @@ export const categorySchema = z.object({
   isAnt: z.enum(["true", "false"]).transform((value) => value === "true"),
 });
 
-/** Nombres que no se pueden cambiar ni ocultar: la app los usa para crear categorías nuevas. */
-export const PROTECTED_CATEGORIES = ["Otros", "Otros ingresos"];
+/** Categorías «Otros»: al elegirlas se puede escribir una categoría nueva. */
+export const OTHER_CATEGORIES = ["Otros", "Otros ingresos"];
+
+/** Donde va el costo de un retiro. */
+export const FEES_CATEGORY = "Comisiones y cargos";
+
+/** Nombres que no se pueden cambiar ni ocultar: la app los usa por su nombre. */
+export const PROTECTED_CATEGORIES = [...OTHER_CATEGORIES, FEES_CATEGORY];
 
 /**
  * Ruta interna segura a la que volver después de guardar. Solo acepta rutas propias

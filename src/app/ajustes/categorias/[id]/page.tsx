@@ -7,7 +7,7 @@ import { CategoryForm } from "@/components/movements/category-form";
 import { ItemHeader, Screen, ScreenFallback } from "@/components/onboarding/screen";
 import { Button } from "@/components/ui/button";
 import { openApp } from "@/lib/movements/data";
-import { PROTECTED_CATEGORIES } from "@/lib/movements/validation";
+import { FEES_CATEGORY, PROTECTED_CATEGORIES } from "@/lib/movements/validation";
 
 import { saveCategory, setCategoryHidden } from "../../../movimientos/actions";
 
@@ -69,8 +69,9 @@ async function Category({ params }: Props) {
       />
       {isProtected ? (
         <p className="px-1 text-[13px] text-muted-foreground">
-          Esta categoría no se puede renombrar ni ocultar: es la que usas para crear categorías
-          nuevas mientras registras.
+          {category.name === FEES_CATEGORY
+            ? "Esta categoría no se puede renombrar ni ocultar: ahí se guarda el costo de tus retiros."
+            : "Esta categoría no se puede renombrar ni ocultar: es la que usas para crear categorías nuevas mientras registras."}
         </p>
       ) : (
         <form action={setCategoryHidden.bind(null, category.id, !isHidden)}>
