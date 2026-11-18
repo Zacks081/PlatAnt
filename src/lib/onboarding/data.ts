@@ -115,6 +115,8 @@ export async function getCard(db: Supabase) {
       .from("installment_plans")
       .select("id, name, kind, principal, installments_count")
       .eq("credit_card_id", card.id)
+      // Solo lo que se debía antes de usar la app; las compras nuevas vienen de los gastos.
+      .eq("is_initial", true)
       .order("created_at"),
   );
   return { ...card, plans };

@@ -28,6 +28,8 @@ export async function movementFormData(
     otherCategoryId:
       visible.find((category) => category.name === "Otros" || category.name === "Otros ingresos")
         ?.id ?? null,
+    /** El bolsillo de la tarjeta: al elegirlo se pregunta a cuántas cuotas. */
+    cardPocketId: pockets.find((pocket) => pocket.kind === "credit_card")?.id ?? null,
     // A la tarjeta no le entra plata: un ingreso va a la cuenta o al efectivo.
     pockets: pockets
       .filter((pocket) => kind === "expense" || pocket.kind !== "credit_card")

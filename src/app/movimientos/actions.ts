@@ -76,6 +76,42 @@ async function resolveCategory(
   return error ? { error: SAVE_ERROR } : { id: created.id };
 }
 
+/**
+ * El plan de cuotas de un gasto con tarjeta: se crea o se actualiza con el valor y las cuotas,
+ * y se quita si el gasto deja de ser con tarjeta. Devuelve el error, si lo hubo.
+ */
+async function syncCardPlan(
+  db: Db,
+  movementId: string,
+  isCard: boolean,
+  plan: { principal: number; installments: number; name: string },
+): Promise<string | null> {
+  if (!isCard) {
+    const { error } = await db.from("installment_plans").delete().eq("movement_id", movementId);
+    return error?.message ?? null;
+  }
+  const { data: card } = await db.from("credit_cards").select("id").maybeSingle();
+  if (!card) return "No hay tarjeta registrada";
+
+  const row = {
+    name: plan.name.slice(0, 60),
+    kind: "purchase" as const,
+    principal: plan.principal,
+    installments_count: plan.installments,
+  };
+  const { data: existing } = await db
+    .from("installment_plans")
+    .select("id")
+    .eq("movement_id", movementId)
+    .maybeSingle();
+  const { error } = existing
+    ? await db.from("installment_plans").update(row).eq("id", existing.id)
+    : await db
+        .from("installment_plans")
+        .insert({ ...row, credit_card_id: card.id, movement_id: movementId, is_initial: false });
+  return error?.message ?? null;
+}
+
 /** Guardar un gasto o un ingreso, nuevo (`id` en null) o editado. */
 export async function saveMovement(
   kind: MovementKind,
@@ -92,6 +128,7 @@ export async function saveMovement(
     "pocketId",
     "date",
     "description",
+    "installments",
   ]);
 
   const parsed = movementSchema.safeParse(values);
@@ -135,6 +172,13 @@ export async function saveMovement(
     };
   }
 
+  // Un gasto con tarjeta pregunta a cuántas cuotas: de eso sale lo que se paga cada mes.
+  const isCard = kind === "expense" && pocket.kind === "credit_card";
+  const installments = Number(movement.installments || "1");
+  if (isCard && (!Number.isInteger(installments) || installments < 1 || installments > 120)) {
+    return { errors: { installments: "Escribe a cuántas cuotas (1 a 120)." }, values };
+  }
+
   const row = {
     amount: movement.amount,
     category_id: category.id,
@@ -142,10 +186,27 @@ export async function saveMovement(
     occurred_on: formatIsoDate(movement.date),
     description: movement.description || null,
   };
-  const { error } = id
-    ? await db.from("movements").update(row).eq("id", id).eq("origin", "manual")
-    : await db.from("movements").insert({ ...row, kind, origin: "manual" });
-  if (error) return { message: SAVE_ERROR, values };
+  const saved = id
+    ? await db
+        .from("movements")
+        .update(row)
+        .eq("id", id)
+        .eq("origin", "manual")
+        .select("id")
+        .single()
+    : await db
+        .from("movements")
+        .insert({ ...row, kind, origin: "manual" })
+        .select("id")
+        .single();
+  if (saved.error) return { message: SAVE_ERROR, values };
+
+  const planError = await syncCardPlan(db, saved.data.id, isCard, {
+    principal: movement.amount,
+    installments,
+    name: movement.description || movement.newCategory || "Compra con tarjeta",
+  });
+  if (planError) return { message: SAVE_ERROR, values };
 
   await setFlash(
     `${kind === "expense" ? "Gasto" : "Ingreso"} de ${formatMoney(movement.amount, { currency: user.currency })} ${id ? "actualizado" : "guardado"}`,

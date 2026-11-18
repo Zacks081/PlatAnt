@@ -91,6 +91,7 @@ async function Movement({ params, searchParams }: Props) {
         categories={form.categories}
         otherCategoryId={form.otherCategoryId}
         pockets={form.pockets}
+        cardPocketId={form.cardPocketId}
         today={form.today}
         minDate={form.minDate}
         initial={{
@@ -99,6 +100,7 @@ async function Movement({ params, searchParams }: Props) {
           pocketId: movement.pocket_id,
           date: movement.occurred_on,
           description: movement.description ?? undefined,
+          installments: movement.installment_plans[0]?.installments_count,
         }}
         autoFocus={false}
       />

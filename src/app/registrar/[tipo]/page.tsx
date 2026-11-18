@@ -76,6 +76,7 @@ async function Register({ params, searchParams }: Props) {
         categories={form.categories}
         otherCategoryId={form.otherCategoryId}
         pockets={form.pockets}
+        cardPocketId={form.cardPocketId}
         today={form.today}
         minDate={form.minDate}
         initial={{

@@ -66,7 +66,7 @@ export async function getCategories(
 }
 
 const MOVEMENT_FIELDS =
-  "id, kind, amount, occurred_on, description, category_id, pocket_id, to_pocket_id, categories(name, icon), pockets!movements_user_id_pocket_id_fkey(kind, name), to_pocket:pockets!movements_user_id_to_pocket_id_fkey(kind)" as const;
+  "id, kind, amount, occurred_on, description, category_id, pocket_id, to_pocket_id, categories(name, icon), pockets!movements_user_id_pocket_id_fkey(kind, name), to_pocket:pockets!movements_user_id_to_pocket_id_fkey(kind), installment_plans(installments_count)" as const;
 
 export type HistoryFilters = {
   /** Rango de fechas, o `null` para cualquier fecha. */

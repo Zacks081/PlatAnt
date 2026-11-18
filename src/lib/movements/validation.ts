@@ -20,6 +20,8 @@ export const movementSchema = z.object({
   /** Solo cuenta si la categoría elegida es «Otros»: crea una categoría con ese nombre. */
   newCategory: z.string().trim().max(40, "Puede tener máximo 40 caracteres."),
   pocketId: z.uuid("Elige de dónde sale."),
+  /** Solo cuenta si se paga con tarjeta: a cuántas cuotas. */
+  installments: z.string(),
   date: z
     .string()
     .transform((text) => parseIsoDate(text))

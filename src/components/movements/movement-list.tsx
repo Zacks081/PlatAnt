@@ -52,9 +52,12 @@ export function MovementList({
                   ? "Retiro"
                   : "Consignación"
                 : (movement.categories?.name ?? "Sin categoría");
+              const installments = movement.installment_plans[0]?.installments_count ?? 1;
               const where = isTransfer
                 ? `${pocket} → ${POCKET_LABELS[movement.to_pocket?.kind ?? ""] ?? ""}`
-                : pocket;
+                : installments > 1
+                  ? `${pocket} · ${installments} cuotas`
+                  : pocket;
               return (
                 <li key={movement.id}>
                   <Link

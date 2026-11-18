@@ -21,6 +21,8 @@ type MovementFormProps = {
   /** La categoría «Otros»: al elegirla se puede escribir una categoría nueva. */
   otherCategoryId: string | null;
   pockets: Option[];
+  /** El bolsillo de la tarjeta: al elegirlo se pregunta a cuántas cuotas. */
+  cardPocketId: string | null;
   today: CalendarDate;
   /** Primera fecha que se puede elegir. */
   minDate: CalendarDate;
@@ -30,6 +32,7 @@ type MovementFormProps = {
     pocketId?: string;
     date: string;
     description?: string;
+    installments?: number;
   };
   /** Al registrar uno nuevo, el teclado numérico se abre solo. */
   autoFocus: boolean;
@@ -42,6 +45,7 @@ export function MovementForm({
   categories,
   otherCategoryId,
   pockets,
+  cardPocketId,
   today,
   minDate,
   initial,
@@ -52,7 +56,9 @@ export function MovementForm({
     state.values?.[name] ?? String(saved);
   const errors = state.errors ?? {};
   const [categoryId, setCategoryId] = useState(value("categoryId", initial.categoryId));
+  const [pocketId, setPocketId] = useState(value("pocketId", initial.pocketId));
   const isExpense = kind === "expense";
+  const isCard = isExpense && cardPocketId !== null && pocketId === cardPocketId;
 
   return (
     <form action={formAction} noValidate className="flex flex-1 flex-col gap-5">
@@ -89,9 +95,23 @@ export function MovementForm({
           name="pocketId"
           label={isExpense ? "Sale de" : "Entra a"}
           options={pockets}
-          defaultValue={value("pocketId", initial.pocketId)}
+          defaultValue={pocketId}
+          onValueChange={setPocketId}
           error={errors.pocketId}
         />
+        {isCard ? (
+          <TextRow
+            name="installments"
+            label="Cuotas"
+            placeholder="1"
+            inputMode="numeric"
+            maxLength={3}
+            defaultValue={value("installments", initial.installments ?? 1)}
+            error={errors.installments}
+          />
+        ) : (
+          <input type="hidden" name="installments" value="" />
+        )}
         <DateRow
           name="date"
           label="Fecha"
@@ -109,6 +129,12 @@ export function MovementForm({
           error={errors.description}
         />
       </FieldCard>
+      {isCard && (
+        <p className="px-1 text-[13px] text-muted-foreground">
+          Con 1 cuota la pagas completa en el próximo extracto, sin intereses. Con más cuotas, la
+          tarjeta te cobra interés cada mes.
+        </p>
+      )}
 
       <div className="mt-auto flex flex-col gap-3 pt-4">
         <p role="alert" className="px-1 text-sm text-gasto empty:hidden">
