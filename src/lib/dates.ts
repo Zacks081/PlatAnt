@@ -74,3 +74,20 @@ export function formatIsoDate({ year, month, day }: CalendarDate): string {
 export function compareDates(a: CalendarDate, b: CalendarDate): number {
   return a.year - b.year || a.month - b.month || a.day - b.day;
 }
+
+/** La fecha que queda `count` días después (o antes, si es negativo). */
+export function addDays({ year, month, day }: CalendarDate, count: number): CalendarDate {
+  const date = new Date(Date.UTC(year, month - 1, day + count));
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
+}
+
+/** Días que hay de una fecha a otra. Del 1 al 2 del mismo mes: 1. */
+export function daysBetween(from: CalendarDate, to: CalendarDate): number {
+  const time = (date: CalendarDate) => Date.UTC(date.year, date.month - 1, date.day);
+  return Math.round((time(to) - time(from)) / 86_400_000);
+}
+
+/** Día de la semana: 0 es lunes y 6 es domingo. */
+export function weekday({ year, month, day }: CalendarDate): number {
+  return (new Date(Date.UTC(year, month - 1, day)).getUTCDay() + 6) % 7;
+}

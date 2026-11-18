@@ -92,6 +92,16 @@ async function Settings() {
         />
       </Group>
 
+      <Group title="Tus movimientos">
+        <Link
+          href="/ajustes/categorias"
+          className={`${rowClass} rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50`}
+        >
+          <span>Categorías</span>
+          <ChevronRight aria-hidden="true" className="size-[18px] shrink-0 text-muted-foreground" />
+        </Link>
+      </Group>
+
       <Group title="Tu cuenta">
         <div className={rowClass}>
           <span>Nombre de usuario</span>

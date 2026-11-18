@@ -87,6 +87,7 @@ type TextRowProps = {
   suffix?: string;
   /** Avisa lo escrito cada vez que cambia. */
   onValueChange?: (value: string) => void;
+  readOnly?: boolean;
 };
 
 /** Fila para escribir un texto corto o un número que no es plata. */
@@ -177,6 +178,7 @@ type AutoSizeInputProps = {
   onChange: (value: string) => void;
   error?: string;
   className?: string;
+  autoFocus?: boolean;
 };
 
 /**
@@ -193,7 +195,15 @@ function positionAfterDigits(text: string, count: number): number {
   return text.length;
 }
 
-function AutoSizeInput({ id, name, value, onChange, error, className }: AutoSizeInputProps) {
+function AutoSizeInput({
+  id,
+  name,
+  value,
+  onChange,
+  error,
+  className,
+  autoFocus,
+}: AutoSizeInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   // Cuántos dígitos deben quedar a la izquierda del cursor después de volver a poner los puntos.
   const caretDigits = useRef<number | null>(null);
@@ -257,6 +267,7 @@ function AutoSizeInput({ id, name, value, onChange, error, className }: AutoSize
         autoComplete="off"
         placeholder="0"
         size={1}
+        autoFocus={autoFocus}
         ref={inputRef}
         value={value}
         onChange={handleChange}
@@ -276,11 +287,13 @@ type HeroMoneyProps = {
   /** Qué valor es; lo lee el lector de pantalla. */
   label: string;
   defaultValue?: string | number | null;
-  /** Verde si es plata a favor, coral si es plata que sale. */
-  tone: "libre" | "gasto";
+  /** Verde si es plata a favor, coral si es plata que sale, blanco si solo cambia de lugar. */
+  tone: "libre" | "gasto" | "neutral";
   error?: string;
   /** Avisa el monto cada vez que cambia, para cálculos en vivo. */
   onValueChange?: (amount: number | null) => void;
+  /** Abre el teclado numérico apenas carga la pantalla. */
+  autoFocus?: boolean;
 };
 
 /** El valor principal de una pantalla: grande, arriba y con el teclado numérico. */
@@ -291,6 +304,7 @@ export function HeroMoney({
   tone,
   error,
   onValueChange,
+  autoFocus,
 }: HeroMoneyProps) {
   const id = useId();
   const money = useMoneyText(defaultValue, onValueChange);
@@ -307,7 +321,10 @@ export function HeroMoney({
         <span className="sr-only">{label}</span>
         <span
           aria-hidden="true"
-          className={cn("text-[38px]", tone === "libre" ? "text-libre" : "text-gasto")}
+          className={cn(
+            "text-[38px]",
+            tone === "libre" ? "text-libre" : tone === "gasto" ? "text-gasto" : "text-foreground",
+          )}
         >
           $
         </span>
@@ -317,10 +334,15 @@ export function HeroMoney({
           value={money.text}
           onChange={money.onChange}
           error={error}
+          autoFocus={autoFocus}
           className={cn(
             "py-1 leading-none placeholder:text-muted-foreground",
             size,
-            tone === "libre" ? "caret-libre" : "caret-gasto",
+            tone === "libre"
+              ? "caret-libre"
+              : tone === "gasto"
+                ? "caret-gasto"
+                : "caret-foreground",
           )}
         />
       </label>
@@ -520,10 +542,10 @@ type DateRowProps = {
   label: string;
   /** Fecha guardada, como «2027-12-15». */
   defaultValue?: string;
-  /** Primera fecha que se puede elegir (normalmente, hoy). */
+  /** Primera fecha que se puede elegir. */
   min: CalendarDate;
-  /** Cuántos años hacia adelante se ofrecen. */
-  yearsAhead?: number;
+  /** Última fecha que se puede elegir. */
+  max: CalendarDate;
   error?: string;
   onValueChange?: (value: string) => void;
 };
@@ -534,7 +556,7 @@ export function DateRow({
   label,
   defaultValue,
   min,
-  yearsAhead = 10,
+  max,
   error,
   onValueChange,
 }: DateRowProps) {
@@ -560,7 +582,8 @@ export function DateRow({
     onValueChange?.(next);
     setOpen(false);
   };
-  const isPast = (date: CalendarDate) => compareDates(date, min) < 0;
+  const isOutside = (date: CalendarDate) =>
+    compareDates(date, min) < 0 || compareDates(date, max) > 0;
 
   return (
     <Row label={label} htmlFor={id} errorId={`${id}-error`} error={error}>
@@ -597,7 +620,7 @@ export function DateRow({
 
         {step === "year" && (
           <div className="grid grid-cols-3 gap-2 p-2">
-            {Array.from({ length: yearsAhead + 1 }, (_, index) => min.year + index).map(
+            {Array.from({ length: max.year - min.year + 1 }, (_, index) => min.year + index).map(
               (option) => (
                 <button
                   key={option}
@@ -622,12 +645,13 @@ export function DateRow({
         {step === "month" && (
           <div className="grid grid-cols-3 gap-2 p-2">
             {Array.from({ length: 12 }, (_, index) => index + 1).map((option) => {
-              // Un mes ya pasado completo no se puede elegir.
-              const disabled = isPast({
-                year: year!,
-                month: option,
-                day: daysInMonth({ year: year!, month: option }),
-              });
+              // Un mes que queda completo por fuera del rango no se puede elegir.
+              const disabled =
+                isOutside({
+                  year: year!,
+                  month: option,
+                  day: daysInMonth({ year: year!, month: option }),
+                }) && isOutside({ year: year!, month: option, day: 1 });
               const isSelected = selected?.year === year && selected?.month === option;
               return (
                 <button
@@ -657,7 +681,7 @@ export function DateRow({
               (_, index) => index + 1,
             ).map((option) => {
               const date = { year: year!, month: month!, day: option };
-              const disabled = isPast(date);
+              const disabled = isOutside(date);
               const isSelected = selected !== null && compareDates(selected, date) === 0;
               return (
                 <button
