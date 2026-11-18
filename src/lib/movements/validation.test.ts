@@ -11,6 +11,7 @@ const valid = {
   categoryId: ID,
   newCategory: "",
   pocketId: ID,
+  installments: "",
   date: "2026-11-18",
   description: "  Almuerzo ",
 };
@@ -27,6 +28,7 @@ describe("movimiento", () => {
       categoryId: ID,
       newCategory: "",
       pocketId: ID,
+      installments: "",
       date: { year: 2026, month: 11, day: 18 },
       description: "Almuerzo",
     });
