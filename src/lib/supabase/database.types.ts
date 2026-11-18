@@ -169,17 +169,23 @@ isOneToOne: false
                   ]
                 },"movements": {
                   Row: {
-                    "amount": number,"category_id": string | null,"created_at": string,"description": string | null,"id": string,"kind": Database["public"]['Enums']["movement_kind"],"occurred_on": string,"origin": Database["public"]['Enums']["movement_origin"],"pocket_id": string,"to_pocket_id": string | null,"user_id": string
+                    "amount": number,"category_id": string | null,"created_at": string,"description": string | null,"id": string,"kind": Database["public"]['Enums']["movement_kind"],"occurred_on": string,"origin": Database["public"]['Enums']["movement_origin"],"parent_id": string | null,"pocket_id": string,"to_pocket_id": string | null,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount": number,"category_id"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"kind": Database["public"]['Enums']["movement_kind"],"occurred_on": string,"origin"?: Database["public"]['Enums']["movement_origin"],"pocket_id": string,"to_pocket_id"?: string | null,"user_id"?: string
+                    "amount": number,"category_id"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"kind": Database["public"]['Enums']["movement_kind"],"occurred_on": string,"origin"?: Database["public"]['Enums']["movement_origin"],"parent_id"?: string | null,"pocket_id": string,"to_pocket_id"?: string | null,"user_id"?: string
                   }
                   Update: {
-                    "amount"?: number,"category_id"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"kind"?: Database["public"]['Enums']["movement_kind"],"occurred_on"?: string,"origin"?: Database["public"]['Enums']["movement_origin"],"pocket_id"?: string,"to_pocket_id"?: string | null,"user_id"?: string
+                    "amount"?: number,"category_id"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"kind"?: Database["public"]['Enums']["movement_kind"],"occurred_on"?: string,"origin"?: Database["public"]['Enums']["movement_origin"],"parent_id"?: string | null,"pocket_id"?: string,"to_pocket_id"?: string | null,"user_id"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "movements_parent_fkey"
+      columns: ["user_id","parent_id"]
+isOneToOne: false
+      referencedRelation: "movements"
+      referencedColumns: ["user_id","id"]
+    },{
       foreignKeyName: "movements_user_id_category_id_fkey"
       columns: ["user_id","category_id"]
 isOneToOne: false
@@ -250,8 +256,14 @@ isOneToOne: false
               "balance": number,"kind": Database["public"]['Enums']["pocket_kind"],"name": string,"pocket_id": string
             }[]
                            },
+"reconcile_pocket":
+{ Args: { "p_actual": number,"p_expected": number,"p_kind": Database["public"]['Enums']["pocket_kind"] }; Returns: number
+                           },
 "save_credit_card":
 { Args: { "p_debt": number,"p_monthly_rate": number,"p_payment_day": number,"p_rate_is_estimated": boolean,"p_statement_day": number }; Returns: string
+                           },
+"save_transfer":
+{ Args: { "p_amount": number,"p_description"?: string,"p_fee"?: number,"p_from": Database["public"]['Enums']["pocket_kind"],"p_id"?: string,"p_occurred_on": string }; Returns: string
                            },
 "seed_user_defaults":
 { Args: { "p_user_id": string }; Returns: undefined

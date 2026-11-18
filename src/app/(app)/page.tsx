@@ -1,4 +1,4 @@
-import { Settings } from "lucide-react";
+import { ChevronRight, Settings } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -8,7 +8,9 @@ import { Wordmark } from "@/components/wordmark";
 import { todayInTimeZone } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { getBalances, getMovements, openApp } from "@/lib/movements/data";
+import { POCKET_NOUNS, POCKET_PATHS } from "@/lib/pockets/pockets";
 import { SETTINGS_PATH } from "@/lib/onboarding/steps";
+import { cn } from "@/lib/utils";
 
 /**
  * Inicio. Por ahora: lo que tienes (la cifra principal) y los últimos movimientos.
@@ -26,6 +28,12 @@ async function Home() {
   const { user, db } = await openApp();
   const [balances, recent] = await Promise.all([getBalances(db), getMovements(db, undefined, 5)]);
   const money = (amount: number) => formatMoney(amount, { currency: user.currency });
+  const pockets = [
+    { kind: "account", label: "En la cuenta", amount: balances.account },
+    { kind: "cash", label: "En efectivo", amount: balances.cash },
+  ] as const;
+  // Un bolsillo puede quedar en negativo: se avisa, pero no se bloquea.
+  const negative = pockets.filter((pocket) => pocket.amount < 0);
 
   return (
     <Screen>
@@ -45,19 +53,40 @@ async function Home() {
         <p className="font-display text-[clamp(40px,13vw,52px)] leading-[1.05] font-bold tracking-[-0.03em] tabular-nums">
           {money(balances.total)}
         </p>
-        <dl className="mt-3.5 grid grid-cols-2 gap-3 border-t border-border pt-3.5">
-          {(
-            [
-              ["En la cuenta", balances.account],
-              ["En efectivo", balances.cash],
-            ] as const
-          ).map(([label, amount]) => (
-            <div key={label} className="flex min-w-0 flex-col gap-0.5">
-              <dt className="text-[13px] text-muted-foreground">{label}</dt>
-              <dd className="font-display text-xl font-bold tabular-nums">{money(amount)}</dd>
-            </div>
+        <ul className="mt-3.5 grid grid-cols-2 gap-3 border-t border-border pt-3.5">
+          {pockets.map((pocket) => (
+            <li key={pocket.kind} className="min-w-0">
+              {/* Cada bolsillo abre su pantalla, con su saldo, sus movimientos y el cuadre. */}
+              <Link
+                href={POCKET_PATHS[pocket.kind]}
+                className="-m-2 flex min-w-0 flex-col gap-0.5 rounded-2xl p-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <span className="flex items-center gap-0.5 text-[13px] text-muted-foreground">
+                  {pocket.label}
+                  <ChevronRight aria-hidden="true" className="size-3.5" />
+                </span>
+                <span
+                  className={cn(
+                    "font-display text-xl font-bold tabular-nums",
+                    pocket.amount < 0 && "text-gasto",
+                  )}
+                >
+                  {money(pocket.amount)}
+                </span>
+              </Link>
+            </li>
           ))}
-        </dl>
+        </ul>
+        {negative.length > 0 && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            <span className="font-semibold text-gasto">
+              {negative.length > 1
+                ? "Tu cuenta y tu efectivo están en negativo."
+                : `${capitalize(POCKET_NOUNS[negative[0].kind].your)} está en negativo.`}
+            </span>{" "}
+            Seguro falta registrar algo; tócalo para cuadrarlo.
+          </p>
+        )}
       </section>
 
       <section className="flex flex-col gap-2.5">
@@ -87,4 +116,8 @@ async function Home() {
       </section>
     </Screen>
   );
+}
+
+function capitalize(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

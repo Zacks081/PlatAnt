@@ -21,6 +21,8 @@ import {
   PiggyBank,
   Plane,
   Popcorn,
+  Receipt,
+  Scale,
   Shirt,
   ShoppingCart,
   Smartphone,
@@ -59,6 +61,7 @@ export const CATEGORY_ICONS: Record<string, { icon: LucideIcon; label: string }>
   cuidado: { icon: Sparkles, label: "Cuidado personal" },
   deudas: { icon: Landmark, label: "Deudas" },
   ahorro: { icon: PiggyBank, label: "Ahorro" },
+  comisiones: { icon: Receipt, label: "Comisiones" },
   salario: { icon: Briefcase, label: "Salario" },
   ingresos: { icon: Coins, label: "Ingresos" },
   otros: { icon: CircleEllipsis, label: "Otros" },
@@ -66,10 +69,14 @@ export const CATEGORY_ICONS: Record<string, { icon: LucideIcon; label: string }>
 
 export const ICON_KEYS = Object.keys(CATEGORY_ICONS);
 
-/** Íconos de los traslados: se muestran en el historial, pero no se eligen para una categoría. */
+/**
+ * Íconos de los traslados y del cuadre: se muestran en el historial, pero no se eligen para
+ * una categoría.
+ */
 const TRANSFER_ICONS: Record<string, LucideIcon> = {
   retiro: Banknote,
   consignacion: ArrowLeftRight,
+  cuadre: Scale,
 };
 
 /** Ícono de una categoría dentro de un círculo. Si la clave no existe, usa «otros». */

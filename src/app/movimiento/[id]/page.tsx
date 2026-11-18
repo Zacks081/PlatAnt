@@ -6,9 +6,13 @@ import { z } from "zod";
 import { ConfirmDelete } from "@/components/movements/confirm-delete";
 import { MovementForm, TransferForm } from "@/components/movements/movement-form";
 import { ItemHeader, Screen, ScreenFallback } from "@/components/onboarding/screen";
-import { getMovement, openApp } from "@/lib/movements/data";
+import { formatMoney } from "@/lib/money";
+import { getMovement, getTransferFee, openApp } from "@/lib/movements/data";
+import { dayLabel, POCKET_LABELS } from "@/lib/movements/format";
 import { movementFormData } from "@/lib/movements/form-data";
 import { safeReturnPath } from "@/lib/movements/validation";
+import { reconciliationLabel } from "@/lib/pockets/pockets";
+import { todayInTimeZone } from "@/lib/dates";
 
 import { deleteMovement, saveMovement, saveTransfer } from "../../movimientos/actions";
 
@@ -34,8 +38,11 @@ async function Movement({ params, searchParams }: Props) {
   if (!movement) notFound();
 
   if (movement.kind === "transfer") {
-    const form = await movementFormData(db, user, "expense");
     const direction = movement.pockets?.kind === "account" ? "withdrawal" : "deposit";
+    const [form, fee] = await Promise.all([
+      movementFormData(db, user, "expense"),
+      direction === "withdrawal" ? getTransferFee(db, movement.id) : null,
+    ]);
     const noun = direction === "withdrawal" ? "retiro" : "consignación";
     return (
       <Screen>
@@ -48,7 +55,7 @@ async function Movement({ params, searchParams }: Props) {
               title={
                 direction === "withdrawal" ? "¿Borrar este retiro?" : "¿Borrar esta consignación?"
               }
-              description={`Se quita del historial y la plata vuelve a como estaba antes de ${direction === "withdrawal" ? "este" : "esta"} ${noun}. No se puede deshacer.`}
+              description={`Se quita del historial y la plata vuelve a como estaba antes de ${direction === "withdrawal" ? "este" : "esta"} ${noun}${fee ? ", también su costo" : ""}. No se puede deshacer.`}
             />
           }
         />
@@ -61,9 +68,50 @@ async function Movement({ params, searchParams }: Props) {
             amount: movement.amount,
             date: movement.occurred_on,
             description: movement.description ?? undefined,
+            fee,
           }}
           autoFocus={false}
         />
+      </Screen>
+    );
+  }
+
+  // Lo que registró un cuadre no se edita: si estuvo mal, se borra y se cuadra de nuevo.
+  if (movement.origin === "reconciliation") {
+    const label = reconciliationLabel(movement.kind);
+    const pocket = POCKET_LABELS[movement.pockets?.kind ?? ""] ?? "";
+    const rows = [
+      ["Valor", formatMoney(movement.amount, { currency: user.currency })],
+      ["Bolsillo", pocket],
+      ["Fecha", dayLabel(movement.occurred_on, todayInTimeZone(user.timeZone))],
+    ];
+    return (
+      <Screen>
+        <ItemHeader
+          backHref={back}
+          title={label}
+          action={
+            <ConfirmDelete
+              action={deleteMovement.bind(null, movement.id, back)}
+              title={`¿Borrar este ${label.toLowerCase()}?`}
+              description={`${pocket} vuelve al saldo que tenía antes del cuadre. No se puede deshacer.`}
+            />
+          }
+        />
+        <dl className="flex flex-col divide-y divide-border rounded-[24px] bg-card px-5">
+          {rows.map(([term, detail]) => (
+            <div key={term} className="flex min-h-14 items-center justify-between gap-3">
+              <dt className="text-muted-foreground">{term}</dt>
+              <dd className="font-semibold tabular-nums">{detail}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="px-1 text-[13px] text-muted-foreground">
+          {movement.kind === "expense"
+            ? "Lo registró el cuadre de saldo: tenías menos plata de la que la app calculaba."
+            : "Lo registró el cuadre de saldo: tenías más plata de la que la app calculaba."}{" "}
+          No se edita; si estuvo mal, bórralo y vuelve a cuadrar.
+        </p>
       </Screen>
     );
   }

@@ -8,14 +8,23 @@ import { compareDates, formatIsoDate, todayInTimeZone } from "@/lib/dates";
 import { setFlash } from "@/lib/flash";
 import { firstFieldErrors, readForm, type FormState } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
-import { openApp, type Db, type MovementKind } from "@/lib/movements/data";
+import { getBalances, openApp, type Db, type MovementKind } from "@/lib/movements/data";
 import {
   categorySchema,
   movementSchema,
+  OTHER_CATEGORIES,
   PROTECTED_CATEGORIES,
+  reconcileSchema,
   safeReturnPath,
   transferSchema,
 } from "@/lib/movements/validation";
+import {
+  POCKET_NOUNS,
+  POCKET_PATHS,
+  reconciliation,
+  reconciliationLabel,
+  type CashPocket,
+} from "@/lib/pockets/pockets";
 
 /**
  * Acciones de movimientos y categorías. Cada una comprueba la sesión, valida lo que llega y
@@ -25,6 +34,21 @@ import {
 const SAVE_ERROR = "No pudimos guardar. Intenta de nuevo en un momento.";
 const CATEGORIES_PATH = "/ajustes/categorias";
 const idSchema = z.uuid();
+
+/**
+ * Si al guardar la cuenta o el efectivo quedó en negativo, se avisa (pero no se bloquea):
+ * devuelve la frase que se suma al aviso, o "" si todo está bien.
+ */
+async function negativeWarning(db: Db, pockets: readonly string[]): Promise<string> {
+  const balances = await getBalances(db);
+  const negative = (["account", "cash"] as const).filter(
+    (kind) => pockets.includes(kind) && balances[kind] < 0,
+  );
+  if (negative.length === 0) return "";
+  const names = negative.map((kind) => POCKET_NOUNS[kind].the);
+  const subject = names.join(" y ");
+  return `. Ojo: ${subject} ${negative.length > 1 ? "quedaron" : "quedó"} en negativo`;
+}
 
 /** Después de guardar, el navegador olvida sus copias de las pantallas y se va a `path`. */
 function finish(path: string): never {
@@ -53,7 +77,7 @@ async function resolveCategory(
   // Una categoría oculta solo sirve si el movimiento ya la tenía.
   if (chosen.archived_at && chosen.id !== currentCategoryId)
     return { error: "Elige una categoría." };
-  if (!PROTECTED_CATEGORIES.includes(chosen.name) || newName === "") return { id: chosen.id };
+  if (!OTHER_CATEGORIES.includes(chosen.name) || newName === "") return { id: chosen.id };
 
   const { data: existing } = await db
     .from("categories")
@@ -208,15 +232,21 @@ export async function saveMovement(
   });
   if (planError) return { message: SAVE_ERROR, values };
 
+  const warning = kind === "expense" ? await negativeWarning(db, [pocket.kind]) : "";
   await setFlash(
-    `${kind === "expense" ? "Gasto" : "Ingreso"} de ${formatMoney(movement.amount, { currency: user.currency })} ${id ? "actualizado" : "guardado"}`,
+    `${kind === "expense" ? "Gasto" : "Ingreso"} de ${formatMoney(movement.amount, { currency: user.currency })} ${id ? "actualizado" : "guardado"}${warning}`,
   );
   finish(safeReturnPath(back));
 }
 
 export async function deleteMovement(id: string, back: string): Promise<void> {
   const { db } = await openApp();
-  await db.from("movements").delete().eq("id", idSchema.parse(id)).eq("origin", "manual");
+  // El costo de un retiro se borra con él (la base de datos lo hace sola).
+  await db
+    .from("movements")
+    .delete()
+    .eq("id", idSchema.parse(id))
+    .in("origin", ["manual", "reconciliation"]);
   await setFlash("Movimiento borrado");
   finish(safeReturnPath(back));
 }
@@ -294,7 +324,7 @@ export async function saveTransfer(
   formData: FormData,
 ): Promise<FormState> {
   const { user, db } = await openApp();
-  const values = readForm(formData, ["amount", "date", "description"]);
+  const values = readForm(formData, ["amount", "date", "description", "fee"]);
 
   const parsed = transferSchema.safeParse(values);
   if (!parsed.success) return { errors: firstFieldErrors(parsed.error), values };
@@ -304,35 +334,75 @@ export async function saveTransfer(
     return { errors: { date: "La fecha no puede ser después de hoy." }, values };
   }
 
-  const { data: pockets } = await db
-    .from("pockets")
-    .select("id, kind")
-    .in("kind", ["account", "cash"]);
-  const account = pockets?.find((pocket) => pocket.kind === "account")?.id;
-  const cash = pockets?.find((pocket) => pocket.kind === "cash")?.id;
-  if (!account || !cash) return { message: SAVE_ERROR, values };
-  const [from, to] = direction === "withdrawal" ? [account, cash] : [cash, account];
-
-  const row = {
-    amount: transfer.amount,
-    occurred_on: formatIsoDate(transfer.date),
-    description: transfer.description || null,
-  };
-  // Al editar solo cambian el valor, la fecha y la nota: el sentido del traslado es fijo.
-  const { error } = id
-    ? await db
-        .from("movements")
-        .update(row)
-        .eq("id", idSchema.parse(id))
-        .eq("kind", "transfer")
-        .eq("origin", "manual")
-    : await db
-        .from("movements")
-        .insert({ ...row, kind: "transfer", origin: "manual", pocket_id: from, to_pocket_id: to });
+  // Todo de una vez en la base de datos: el traslado y, en un retiro, su costo como gasto
+  // aparte. Al editar, el sentido del traslado no cambia.
+  const isWithdrawal = direction === "withdrawal";
+  const { error } = await db.rpc("save_transfer", {
+    p_from: isWithdrawal ? "account" : "cash",
+    p_amount: transfer.amount,
+    p_occurred_on: formatIsoDate(transfer.date),
+    p_id: id ? idSchema.parse(id) : undefined,
+    p_description: transfer.description || undefined,
+    p_fee: isWithdrawal ? transfer.fee : 0,
+  });
+  if (error?.code === "P0002") return { message: "Ese movimiento ya no existe.", values };
   if (error) return { message: SAVE_ERROR, values };
 
-  await setFlash(
-    `${direction === "withdrawal" ? "Retiro" : "Consignación"} de ${formatMoney(transfer.amount, { currency: user.currency })} ${id ? (direction === "withdrawal" ? "actualizado" : "actualizada") : direction === "withdrawal" ? "guardado" : "guardada"}`,
-  );
+  const money = (amount: number) => formatMoney(amount, { currency: user.currency });
+  const what = isWithdrawal ? "Retiro" : "Consignación";
+  const done = id
+    ? isWithdrawal
+      ? "actualizado"
+      : "actualizada"
+    : isWithdrawal
+      ? "guardado"
+      : "guardada";
+  const fee = isWithdrawal && transfer.fee > 0 ? ` (y su costo de ${money(transfer.fee)})` : "";
+  const warning = await negativeWarning(db, [isWithdrawal ? "account" : "cash"]);
+  await setFlash(`${what} de ${money(transfer.amount)} ${done}${fee}${warning}`);
   finish(safeReturnPath(back));
+}
+
+// --- Cuadre de saldo --------------------------------------------------------
+
+/**
+ * Cuadrar la cuenta o el efectivo: el usuario escribe cuánto tiene de verdad y la diferencia
+ * con lo que calcula la app se registra como «gasto sin registrar» o «ingreso sin registrar».
+ * El cálculo lo hace la base de datos, contra el saldo que el usuario vio al cuadrar.
+ */
+export async function reconcilePocket(
+  pocket: CashPocket,
+  _previous: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const { user, db } = await openApp();
+  const values = readForm(formData, ["actual", "expected"]);
+
+  const parsed = reconcileSchema.safeParse(values);
+  if (!parsed.success) return { errors: firstFieldErrors(parsed.error), values };
+  const { actual, expected } = parsed.data;
+
+  const { data: difference, error } = await db.rpc("reconcile_pocket", {
+    p_kind: pocket,
+    p_expected: expected,
+    p_actual: actual,
+  });
+  if (error?.code === "PA409") {
+    // Se registró algo mientras tanto: la pantalla vuelve a cargar con el saldo nuevo.
+    revalidatePath("/", "layout");
+    return {
+      message: "Tu saldo cambió mientras cuadrabas. Revisa la diferencia y vuelve a confirmar.",
+      values: { actual: values.actual },
+    };
+  }
+  if (error || difference === null) return { message: SAVE_ERROR, values };
+
+  const result = reconciliation(expected, expected + difference);
+  const nouns = POCKET_NOUNS[pocket];
+  await setFlash(
+    result.kind === "none"
+      ? `Todo en orden: ${nouns.your} ya cuadraba`
+      : `${nouns.reconciled}: ${reconciliationLabel(result.kind).toLowerCase()} de ${formatMoney(result.amount, { currency: user.currency })}`,
+  );
+  finish(POCKET_PATHS[pocket]);
 }

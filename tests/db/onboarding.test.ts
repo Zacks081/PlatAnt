@@ -136,6 +136,7 @@ describe("datos de arranque", () => {
       [
         "Ahorro",
         "Comida",
+        "Comisiones y cargos",
         "Deudas",
         "Educación",
         "Entretenimiento",
