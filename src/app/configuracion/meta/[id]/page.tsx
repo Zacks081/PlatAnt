@@ -48,6 +48,7 @@ async function Goal({ params }: Props) {
             targetAmount: goal.target_amount,
             name: goal.name,
             targetDate: goal.target_date,
+            split: goal.split,
           }
         }
       />

@@ -24,27 +24,45 @@ export function resolveCardRate(rate: number | null): {
     : { monthlyRate: rate, isEstimated: false };
 }
 
-/** Cuota mensual estimada de un plan: el saldo repartido en las cuotas que faltan, sin intereses. */
-export function planMonthlyPayment(principal: number, installmentsCount: number): number {
-  return Math.ceil(principal / Math.max(1, installmentsCount));
+export type CardPlan = {
+  kind: "purchase" | "advance" | "subscription";
+  principal: number;
+  installmentsCount: number;
+};
+
+/**
+ * Lo que se paga este mes por algo de la tarjeta. Es la próxima cuota, la más alta:
+ * - plan mensual: su valor, sin intereses;
+ * - compra o avance: el saldo repartido en las cuotas que faltan, más el interés del mes
+ *   sobre lo que se debe. Una compra a una sola cuota no paga interés; un avance sí,
+ *   desde el primer día.
+ * Los bancos cobran el abono a capital fijo y el interés sobre el saldo, así que las
+ * siguientes cuotas van bajando: esta es una estimación prudente.
+ */
+export function planMonthlyPayment(plan: CardPlan, monthlyRate: number): number {
+  if (plan.kind === "subscription") return plan.principal;
+  const installments = Math.max(1, plan.installmentsCount);
+  const capital = Math.ceil(plan.principal / installments);
+  const paysInterest = plan.kind === "advance" || installments > 1;
+  const interest = paysInterest ? Math.round((plan.principal * monthlyRate) / 100) : 0;
+  return capital + interest;
+}
+
+/**
+ * Cuánto hay que apartar cada mes para llegar a la meta en su fecha.
+ * Cuenta los meses que faltan hasta el mes de la meta; si ya es ese mes o pasó, toma uno.
+ */
+export function goalMonthlyContribution(input: {
+  targetAmount: number;
+  target: YearMonth;
+  today: YearMonth;
+}): number {
+  const months = Math.max(1, monthsBetween(input.today, input.target));
+  return Math.ceil(input.targetAmount / months);
 }
 
 /** Pagos que se reciben al mes. */
 export const paymentsPerMonth = (frequency: PayFrequency) => (frequency === "biweekly" ? 2 : 1);
-
-/**
- * Cuánto hay que apartar en cada pago para llegar a la meta en su fecha.
- * Cuenta los meses que faltan hasta el mes de la meta; si ya es ese mes o pasó, toma uno.
- */
-export function goalContributionPerPayment(input: {
-  targetAmount: number;
-  target: YearMonth;
-  today: YearMonth;
-  payFrequency: PayFrequency;
-}): number {
-  const months = Math.max(1, monthsBetween(input.today, input.target));
-  return Math.ceil(input.targetAmount / (months * paymentsPerMonth(input.payFrequency)));
-}
 
 /**
  * De cuál pago sale un compromiso con día fijo (cuota de deuda, pago de tarjeta) cuando
@@ -61,13 +79,19 @@ export type EstimateInput = {
   payFrequency: PayFrequency;
   payDays: readonly number[];
   fixedExpenses: readonly { amount: number; split: ExpenseSplit }[];
-  debts: readonly { installmentAmount: number; paymentDay: number }[];
+  /**
+   * Cuotas de deudas. Con `split`, salen de la quincena elegida; sin él (un pago único),
+   * del último pago recibido antes del día en que se paga.
+   */
+  debts: readonly { installmentAmount: number; paymentDay: number; split: ExpenseSplit | null }[];
   card: {
-    paymentDay: number;
-    plans: readonly { principal: number; installmentsCount: number }[];
+    split: ExpenseSplit;
+    /** Tasa mensual en porcentaje (3 si no se conoce). */
+    monthlyRate: number;
+    plans: readonly CardPlan[];
   } | null;
-  /** Aporte a la meta en cada pago (ver goalContributionPerPayment). */
-  goalPerPayment: number;
+  /** Aporte mensual a cada meta (ver goalMonthlyContribution) y de qué quincena sale. */
+  goals: readonly { monthly: number; split: ExpenseSplit }[];
 };
 
 export type EstimateState = "good" | "regular" | "bad";
@@ -97,42 +121,38 @@ function halves(amount: number): [number, number] {
  */
 export function estimateFreeMoney(input: EstimateInput): Estimate {
   const sum = (values: readonly number[]) => values.reduce((total, value) => total + value, 0);
-  const payments = paymentsPerMonth(input.payFrequency);
 
   const fixedExpenses = sum(input.fixedExpenses.map((expense) => expense.amount));
   const debts = sum(input.debts.map((debt) => debt.installmentAmount));
-  const card = sum(
-    (input.card?.plans ?? []).map((plan) =>
-      planMonthlyPayment(plan.principal, plan.installmentsCount),
-    ),
-  );
-  const goal = input.goalPerPayment * payments;
+  const card = input.card
+    ? sum(input.card.plans.map((plan) => planMonthlyPayment(plan, input.card!.monthlyRate)))
+    : 0;
+  const goal = sum(input.goals.map((item) => item.monthly));
   const free = input.monthlyIncome - fixedExpenses - debts - card - goal;
 
   let periods: Estimate["periods"] = null;
   if (input.payFrequency === "biweekly") {
     const [incomeFirst, incomeSecond] = halves(input.monthlyIncome);
-    let first = incomeFirst - input.goalPerPayment;
-    let second = incomeSecond - input.goalPerPayment;
+    let first = incomeFirst;
+    let second = incomeSecond;
 
-    for (const expense of input.fixedExpenses) {
-      if (expense.split === "first") first -= expense.amount;
-      else if (expense.split === "second") second -= expense.amount;
+    /** Descuenta un pago de la quincena que le toca, o la mitad de cada una. */
+    const charge = (amount: number, split: ExpenseSplit) => {
+      if (split === "first") first -= amount;
+      else if (split === "second") second -= amount;
       else {
-        const [a, b] = halves(expense.amount);
+        const [a, b] = halves(amount);
         first -= a;
         second -= b;
       }
-    }
+    };
+
+    for (const expense of input.fixedExpenses) charge(expense.amount, expense.split);
     for (const debt of input.debts) {
-      if (payPeriodForDay(debt.paymentDay, input.payDays) === "first") {
-        first -= debt.installmentAmount;
-      } else second -= debt.installmentAmount;
+      charge(debt.installmentAmount, debt.split ?? payPeriodForDay(debt.paymentDay, input.payDays));
     }
-    if (input.card) {
-      if (payPeriodForDay(input.card.paymentDay, input.payDays) === "first") first -= card;
-      else second -= card;
-    }
+    if (input.card) charge(card, input.card.split);
+    for (const item of input.goals) charge(item.monthly, item.split);
     periods = { first, second };
   }
 
@@ -149,11 +169,18 @@ export function estimateFreeMoney(input: EstimateInput): Estimate {
 }
 
 /**
- * Cómo va el usuario según lo libre: mal si no le alcanza, regular si le queda menos
- * del 10 % del ingreso, bien en adelante.
+ * Porcentaje del ingreso que debe quedar libre cada mes, después de gastos fijos, cuotas,
+ * tarjeta y aportes a metas. Lo libre paga el día a día (mercado, transporte) y los gustos.
+ * Basado en la regla 50/30/20, que deja el 30 % del ingreso para gastos variables y gustos.
+ * El límite está en 25 % para que quien siga esa regla quede en verde con margen.
+ * - 25 % o más: bien.
+ * - entre 15 % y 25 %: regular, queda poco para el día a día.
+ * - menos de 15 %: mal, ni el mercado y el transporte del mes alcanzan con holgura.
  */
+export const FREE_SHARE = { good: 25, regular: 15 } as const;
+
 export function estimateState(free: number, monthlyIncome: number): EstimateState {
-  if (free < 0) return "bad";
-  if (free * 10 < monthlyIncome) return "regular";
+  if (free * 100 < FREE_SHARE.regular * monthlyIncome) return "bad";
+  if (free * 100 < FREE_SHARE.good * monthlyIncome) return "regular";
   return "good";
 }

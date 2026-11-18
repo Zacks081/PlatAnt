@@ -128,6 +128,7 @@ export const cardSchema = z.object({
   statementDay: dayOfMonth("Elige el día de corte."),
   paymentDay: dayOfMonth("Elige el día de pago."),
   monthlyRate: optionalRate,
+  split: z.enum(["first", "second", "half"], { error: "Elige de qué quincena sale." }),
 });
 
 /**
@@ -168,6 +169,7 @@ export const debtSchema = z
     installmentAmount: z.string(),
     paymentDay: z.string(),
     installmentsRemaining: z.string(),
+    split: z.enum(["first", "second", "half"], { error: "Elige de qué quincena sale." }),
   })
   .transform((data, context) => {
     const fail = (field: string, message: string) => {
@@ -187,6 +189,7 @@ export const debtSchema = z
         installmentAmount: data.originalAmount,
         paymentDay: dueDate.day,
         installmentsRemaining: 1,
+        split: data.split,
       };
     }
 
@@ -213,6 +216,7 @@ export const debtSchema = z
       installmentAmount: installmentAmount.data,
       paymentDay: paymentDay.data,
       installmentsRemaining: installmentsRemaining.data,
+      split: data.split,
     };
   });
 
@@ -220,4 +224,5 @@ export const goalSchema = z.object({
   targetAmount: money("Escribe cuánto quieres juntar."),
   name: name("Ponle un nombre a la meta."),
   targetDate: isoDate("Elige para cuándo la quieres."),
+  split: z.enum(["first", "second", "half"], { error: "Elige de qué quincena sale." }),
 });

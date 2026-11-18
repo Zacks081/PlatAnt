@@ -42,6 +42,7 @@ async function Debt({ params }: Props) {
         key={debt?.id ?? "nueva"}
         action={saveDebt.bind(null, debt?.id ?? null)}
         today={todayInTimeZone(user.timeZone)}
+        askSplit={user.payFrequency === "biweekly"}
         initial={
           debt && {
             originalAmount: debt.original_amount,
@@ -51,6 +52,7 @@ async function Debt({ params }: Props) {
             installmentAmount: debt.installment_amount,
             paymentDay: debt.payment_day,
             installmentsRemaining: debt.installments_remaining,
+            split: debt.split,
           }
         }
       />

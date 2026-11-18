@@ -5,7 +5,13 @@ import type { ReactNode } from "react";
 import { completeStep } from "@/app/configuracion/actions";
 import { buttonVariants } from "@/components/ui/button";
 import type { CurrentUser } from "@/lib/auth/session";
-import { LAST_STEP, pathBeforeStep, STEPS, type StepNumber } from "@/lib/onboarding/steps";
+import {
+  isEditing,
+  LAST_STEP,
+  pathBeforeStep,
+  STEPS,
+  type StepNumber,
+} from "@/lib/onboarding/steps";
 import { cn } from "@/lib/utils";
 
 /** Piezas de pantalla del recorrido inicial y de Ajustes (sin estado: se pintan en el servidor). */
@@ -37,13 +43,15 @@ export function BackLink({ href, label }: { href: string; label: string }) {
 }
 
 /**
- * Encabezado de un paso. Durante el recorrido muestra el avance y, si el paso es opcional,
- * «Saltar». Cuando se llega desde Ajustes o desde el resumen, solo la flecha de volver.
+ * Encabezado de un paso. Durante el recorrido muestra el avance y, la primera vez que se pasa
+ * por un paso opcional, «Saltar». Al editar desde Ajustes, solo la flecha de volver.
  */
 export function StepHeader({ step, user }: { step: StepNumber; user: CurrentUser }) {
   const back = pathBeforeStep(step, user);
-  const inWizard = !user.onboardingCompleted && user.onboardingStep < LAST_STEP;
-  const { optional } = STEPS[step - 1];
+  // La barra de avance se ve durante todo el recorrido, también al devolverse desde el resumen.
+  const inWizard = !user.onboardingCompleted;
+  // «Saltar» solo tiene sentido la primera vez que se pasa por el paso.
+  const canSkip = STEPS[step - 1].optional && !isEditing(user);
 
   return (
     <header className="flex min-h-11 items-center gap-3">
@@ -66,7 +74,7 @@ export function StepHeader({ step, user }: { step: StepNumber; user: CurrentUser
               />
             ))}
           </div>
-          {optional ? (
+          {canSkip ? (
             <form action={completeStep.bind(null, step)}>
               <button
                 type="submit"

@@ -45,14 +45,14 @@ isOneToOne: false
                   ]
                 },"credit_cards": {
                   Row: {
-                    "created_at": string,"id": string,"monthly_rate": number,"payment_day": number,"pocket_id": string,"rate_is_estimated": boolean,"statement_day": number,"updated_at": string,"user_id": string
+                    "created_at": string,"id": string,"monthly_rate": number,"payment_day": number,"pocket_id": string,"rate_is_estimated": boolean,"split": Database["public"]['Enums']["expense_split"],"statement_day": number,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"id"?: string,"monthly_rate"?: number,"payment_day": number,"pocket_id": string,"rate_is_estimated"?: boolean,"statement_day": number,"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"id"?: string,"monthly_rate"?: number,"payment_day": number,"pocket_id": string,"rate_is_estimated"?: boolean,"split"?: Database["public"]['Enums']["expense_split"],"statement_day": number,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"monthly_rate"?: number,"payment_day"?: number,"pocket_id"?: string,"rate_is_estimated"?: boolean,"statement_day"?: number,"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"id"?: string,"monthly_rate"?: number,"payment_day"?: number,"pocket_id"?: string,"rate_is_estimated"?: boolean,"split"?: Database["public"]['Enums']["expense_split"],"statement_day"?: number,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -71,14 +71,14 @@ isOneToOne: false
                   ]
                 },"debts": {
                   Row: {
-                    "closed_at": string | null,"created_at": string,"due_date": string | null,"id": string,"installment_amount": number,"installments_remaining": number,"name": string,"original_amount": number,"payment_day": number,"payment_type": Database["public"]['Enums']["debt_payment_type"],"updated_at": string,"user_id": string
+                    "closed_at": string | null,"created_at": string,"due_date": string | null,"id": string,"installment_amount": number,"installments_remaining": number,"name": string,"original_amount": number,"payment_day": number,"payment_type": Database["public"]['Enums']["debt_payment_type"],"split": Database["public"]['Enums']["expense_split"],"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "closed_at"?: string | null,"created_at"?: string,"due_date"?: string | null,"id"?: string,"installment_amount": number,"installments_remaining": number,"name": string,"original_amount": number,"payment_day": number,"payment_type"?: Database["public"]['Enums']["debt_payment_type"],"updated_at"?: string,"user_id"?: string
+                    "closed_at"?: string | null,"created_at"?: string,"due_date"?: string | null,"id"?: string,"installment_amount": number,"installments_remaining": number,"name": string,"original_amount": number,"payment_day": number,"payment_type"?: Database["public"]['Enums']["debt_payment_type"],"split"?: Database["public"]['Enums']["expense_split"],"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "closed_at"?: string | null,"created_at"?: string,"due_date"?: string | null,"id"?: string,"installment_amount"?: number,"installments_remaining"?: number,"name"?: string,"original_amount"?: number,"payment_day"?: number,"payment_type"?: Database["public"]['Enums']["debt_payment_type"],"updated_at"?: string,"user_id"?: string
+                    "closed_at"?: string | null,"created_at"?: string,"due_date"?: string | null,"id"?: string,"installment_amount"?: number,"installments_remaining"?: number,"name"?: string,"original_amount"?: number,"payment_day"?: number,"payment_type"?: Database["public"]['Enums']["debt_payment_type"],"split"?: Database["public"]['Enums']["expense_split"],"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -117,14 +117,14 @@ isOneToOne: false
                   ]
                 },"goals": {
                   Row: {
-                    "achieved_at": string | null,"created_at": string,"id": string,"name": string,"target_amount": number,"target_date": string,"updated_at": string,"user_id": string
+                    "achieved_at": string | null,"created_at": string,"id": string,"name": string,"split": Database["public"]['Enums']["expense_split"],"target_amount": number,"target_date": string,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "achieved_at"?: string | null,"created_at"?: string,"id"?: string,"name": string,"target_amount": number,"target_date": string,"updated_at"?: string,"user_id"?: string
+                    "achieved_at"?: string | null,"created_at"?: string,"id"?: string,"name": string,"split"?: Database["public"]['Enums']["expense_split"],"target_amount": number,"target_date": string,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "achieved_at"?: string | null,"created_at"?: string,"id"?: string,"name"?: string,"target_amount"?: number,"target_date"?: string,"updated_at"?: string,"user_id"?: string
+                    "achieved_at"?: string | null,"created_at"?: string,"id"?: string,"name"?: string,"split"?: Database["public"]['Enums']["expense_split"],"target_amount"?: number,"target_date"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {

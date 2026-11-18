@@ -186,7 +186,7 @@ async function syncCardDebt(db: Db) {
 
 export async function saveCard(_previous: FormState, formData: FormData): Promise<FormState> {
   const { user, db } = await openStep(4);
-  const values = readForm(formData, ["statementDay", "paymentDay", "monthlyRate"]);
+  const values = readForm(formData, ["statementDay", "paymentDay", "monthlyRate", "split"]);
 
   const parsed = cardSchema.safeParse(values);
   if (!parsed.success) return { errors: firstFieldErrors(parsed.error), values };
@@ -201,6 +201,11 @@ export async function saveCard(_previous: FormState, formData: FormData): Promis
     p_debt: cardDebt(card?.plans ?? []),
   });
   if (error) return { ...SAVE_ERROR, values };
+  const { error: splitError } = await db
+    .from("credit_cards")
+    .update({ split: parsed.data.split })
+    .eq("user_id", user.id);
+  if (splitError) return { ...SAVE_ERROR, values };
 
   // «Agregar» guarda la tarjeta y abre el formulario de lo que se debe.
   if (formData.get("intent") === "add-plan") finish(NEW_PLAN_PATH);
@@ -263,6 +268,7 @@ export async function saveDebt(
     "installmentAmount",
     "paymentDay",
     "installmentsRemaining",
+    "split",
   ]);
 
   const parsed = debtSchema.safeParse(values);
@@ -281,6 +287,7 @@ export async function saveDebt(
     installment_amount: debt.installmentAmount,
     payment_day: debt.paymentDay,
     installments_remaining: debt.installmentsRemaining,
+    split: debt.split,
   };
   const { error } = id
     ? await db.from("debts").update(row).eq("id", idSchema.parse(id))
@@ -304,7 +311,7 @@ export async function saveGoal(
   formData: FormData,
 ): Promise<FormState> {
   const { user, db } = await openStep(6);
-  const values = readForm(formData, ["targetAmount", "name", "targetDate"]);
+  const values = readForm(formData, ["targetAmount", "name", "targetDate", "split"]);
 
   const parsed = goalSchema.safeParse(values);
   if (!parsed.success) return { errors: firstFieldErrors(parsed.error), values };
@@ -317,6 +324,7 @@ export async function saveGoal(
     name: parsed.data.name,
     target_amount: parsed.data.targetAmount,
     target_date: formatIsoDate(parsed.data.targetDate),
+    split: parsed.data.split,
   };
   const { error } = id
     ? await db.from("goals").update(row).eq("id", idSchema.parse(id))

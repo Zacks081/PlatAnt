@@ -135,13 +135,14 @@ describe("gasto fijo", () => {
 });
 
 describe("tarjeta", () => {
-  const valid = { statementDay: "15", paymentDay: "30", monthlyRate: "" };
+  const valid = { statementDay: "15", paymentDay: "30", monthlyRate: "", split: "half" };
 
   it("sin tasa escrita queda en null, para aplicar el 3 % estimado", () => {
     expect(cardSchema.parse(valid)).toEqual({
       statementDay: 15,
       paymentDay: 30,
       monthlyRate: null,
+      split: "half",
     });
   });
 
@@ -202,6 +203,7 @@ describe("deuda", () => {
     installmentAmount: "150.000",
     paymentDay: "30",
     installmentsRemaining: "6",
+    split: "first",
   };
   const single = {
     ...monthly,
@@ -221,6 +223,7 @@ describe("deuda", () => {
       installmentAmount: 150_000,
       paymentDay: 30,
       installmentsRemaining: 6,
+      split: "first",
     });
   });
 
@@ -251,6 +254,7 @@ describe("deuda", () => {
       installmentAmount: 900_000,
       paymentDay: 20,
       installmentsRemaining: 1,
+      split: "first",
     });
   });
 
@@ -266,19 +270,47 @@ describe("deuda", () => {
 describe("meta", () => {
   it("acepta una válida, con fecha completa", () => {
     expect(
-      goalSchema.parse({ targetAmount: "3.000.000", name: "Viaje", targetDate: "2027-12-15" }),
+      goalSchema.parse({
+        targetAmount: "3.000.000",
+        name: "Viaje",
+        targetDate: "2027-12-15",
+        split: "half",
+      }),
     ).toEqual({
       targetAmount: 3_000_000,
       name: "Viaje",
       targetDate: { year: 2027, month: 12, day: 15 },
+      split: "half",
     });
   });
 
   it("exige una fecha que exista", () => {
     for (const targetDate of ["", "2027-12", "2027-02-30"]) {
       expect(
-        errorsOf(goalSchema, { targetAmount: "1", name: "Viaje", targetDate }).targetDate,
+        errorsOf(goalSchema, { targetAmount: "1", name: "Viaje", targetDate, split: "half" })
+          .targetDate,
       ).toBe("Elige para cuándo la quieres.");
     }
+  });
+});
+
+describe("de qué quincena sale", () => {
+  it("la tarjeta y las deudas exigen una opción válida", () => {
+    expect(
+      errorsOf(cardSchema, { statementDay: "15", paymentDay: "30", monthlyRate: "", split: "" })
+        .split,
+    ).toBe("Elige de qué quincena sale.");
+    expect(
+      errorsOf(debtSchema, {
+        originalAmount: "1",
+        name: "x",
+        paymentType: "monthly",
+        dueDate: "",
+        installmentAmount: "1",
+        paymentDay: "1",
+        installmentsRemaining: "1",
+        split: "toda",
+      }).split,
+    ).toBe("Elige de qué quincena sale.");
   });
 });

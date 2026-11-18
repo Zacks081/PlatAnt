@@ -7,9 +7,10 @@ import { Suspense } from "react";
 import { BackLink, Screen, ScreenFallback } from "@/components/onboarding/screen";
 import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/money";
+import type { PendingPayment } from "@/lib/onboarding/data";
 import { getSummary, openStep } from "@/lib/onboarding/data";
 import type { EstimateState } from "@/lib/onboarding/estimate";
-import { payDaysLabel } from "@/lib/onboarding/labels";
+import { formatLongDate, payDaysLabel } from "@/lib/onboarding/labels";
 import {
   currentPath,
   LAST_STEP,
@@ -41,21 +42,21 @@ const STATES: Record<
     support: "text-estado-bueno-texto",
     accent: "text-estado-bueno",
     headline: "Te alcanza",
-    rest: "después de lo fijo, las cuotas y tu meta",
+    rest: "después de lo fijo, las cuotas y tus metas",
   },
   regular: {
     card: "border-estado-regular-borde bg-estado-regular-fondo",
     support: "text-estado-regular-texto",
     accent: "text-estado-regular",
     headline: "Vas justo",
-    rest: "casi todo tu ingreso ya tiene destino",
+    rest: "te queda menos del 25% de tus ingresos para el día a día",
   },
   bad: {
     card: "border-estado-malo-borde bg-estado-malo-fondo",
     support: "text-estado-malo-texto",
     accent: "text-estado-malo",
-    headline: "No te alcanza",
-    rest: "tus compromisos superan lo que te entra",
+    headline: "Muy apretado",
+    rest: "te queda menos del 15% de tus ingresos para el día a día",
   },
 };
 
@@ -67,7 +68,15 @@ async function Summary() {
   const summary = await getSummary(db, user);
   const { estimate } = summary;
   const money = (amount: number) => formatMoney(amount, { currency: user.currency });
-  const state = STATES[estimate.state];
+  // Si lo libre es negativo, el mensaje lo dice tal cual.
+  const state =
+    estimate.free < 0
+      ? {
+          ...STATES.bad,
+          headline: "No te alcanza",
+          rest: "tus compromisos superan lo que te entra",
+        }
+      : STATES[estimate.state];
   const isBiweekly = user.payFrequency === "biweekly";
 
   const rows: { step: StepNumber; label: string; detail: string; amount: string }[] = [
@@ -103,7 +112,7 @@ async function Summary() {
     {
       step: 5,
       label: "Deudas",
-      detail: estimate.debts > 0 ? `Cuotas de ${money(estimate.debts)} al mes` : "Ninguna",
+      detail: debtsDetail(estimate.debts, summary.pendingPayments.length, money),
       amount: money(summary.debts.reduce((total, debt) => total + debt.original_amount, 0)),
     },
     {
@@ -149,6 +158,8 @@ async function Summary() {
         )}
       </section>
 
+      <PendingPayments payments={summary.pendingPayments} money={money} isBiweekly={isBiweekly} />
+
       <ul className="flex flex-col divide-y divide-border rounded-[24px] bg-card px-5">
         {rows.map((row) => (
           <li key={row.step}>
@@ -175,5 +186,73 @@ async function Summary() {
         </Button>
       </form>
     </Screen>
+  );
+}
+
+type Money = (amount: number) => string;
+
+/** «Cuotas de $150.000 al mes · 1 pago único», según lo que haya. */
+function debtsDetail(monthly: number, single: number, money: Money): string {
+  const parts = [];
+  if (monthly > 0) parts.push(`Cuotas de ${money(monthly)} al mes`);
+  if (single > 0) parts.push(single === 1 ? "1 pago único" : `${single} pagos únicos`);
+  return parts.length > 0 ? parts.join(" · ") : "Ninguna";
+}
+
+const MAX_PENDING_SHOWN = 2;
+
+/**
+ * Pagos únicos pendientes. No entran en lo libre de un mes normal, así que se muestran aparte,
+ * en ámbar (plata comprometida), con cuánto quedaría libre en la quincena en que caen.
+ */
+function PendingPayments({
+  payments,
+  money,
+  isBiweekly,
+}: {
+  payments: PendingPayment[];
+  money: Money;
+  isBiweekly: boolean;
+}) {
+  if (payments.length === 0) return null;
+
+  if (payments.length > MAX_PENDING_SHOWN) {
+    const total = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    return (
+      <p className="rounded-[24px] border border-estado-regular-borde bg-estado-regular-fondo px-5 py-4 text-sm text-estado-regular-texto">
+        <span className="font-semibold text-estado-regular">
+          Tienes {payments.length} pagos pendientes
+        </span>{" "}
+        por {money(total)}. El primero es el {formatLongDate(payments[0].date)}.
+      </p>
+    );
+  }
+
+  const where = (payment: PendingPayment) =>
+    !isBiweekly
+      ? "Ese mes"
+      : payment.period === "first"
+        ? "Esa primera quincena"
+        : "Esa segunda quincena";
+
+  return (
+    <ul className="flex flex-col divide-y divide-estado-regular-borde rounded-[24px] border border-estado-regular-borde bg-estado-regular-fondo px-5">
+      {payments.map((payment) => (
+        <li
+          key={`${payment.name}-${payment.date.year}-${payment.date.month}-${payment.date.day}`}
+          className="flex flex-col gap-0.5 py-3.5 text-sm"
+        >
+          <p>
+            <span className="font-semibold text-estado-regular">Pago pendiente:</span>{" "}
+            {payment.name} · {money(payment.amount)} el {formatLongDate(payment.date)}
+          </p>
+          <p className="text-estado-regular-texto">
+            {payment.freeAfter >= 0
+              ? `${where(payment)} te quedarían ${money(payment.freeAfter)}.`
+              : `${where(payment)} te faltarían ${money(-payment.freeAfter)}.`}
+          </p>
+        </li>
+      ))}
+    </ul>
   );
 }

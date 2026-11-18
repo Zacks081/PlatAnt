@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, ChevronLeft } from "lucide-react";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 
 import { Sheet } from "@/components/forms/sheet";
 import { appConfig } from "@/config/app";
@@ -85,6 +85,8 @@ type TextRowProps = {
   error?: string;
   /** Texto pegado al final del valor, como «%». */
   suffix?: string;
+  /** Avisa lo escrito cada vez que cambia. */
+  onValueChange?: (value: string) => void;
 };
 
 /** Fila para escribir un texto corto o un número que no es plata. */
@@ -94,6 +96,7 @@ export function TextRow({
   error,
   suffix,
   inputMode = "text",
+  onValueChange,
   ...input
 }: TextRowProps) {
   const id = useId();
@@ -107,6 +110,7 @@ export function TextRow({
         autoComplete="off"
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : undefined}
+        onChange={onValueChange && ((event) => onValueChange(event.target.value))}
         className={rowInputClass}
         {...input}
       />
@@ -179,7 +183,64 @@ type AutoSizeInputProps = {
  * Campo numérico que mide exactamente lo que mide su texto. Debajo hay una copia invisible
  * del texto que le da el ancho, así ninguna cifra se corta sin importar la letra.
  */
+/** Posición en el texto justo después de `count` dígitos (los puntos no cuentan). */
+function positionAfterDigits(text: string, count: number): number {
+  if (count <= 0) return 0;
+  let seen = 0;
+  for (let index = 0; index < text.length; index++) {
+    if (/\d/.test(text[index]) && ++seen === count) return index + 1;
+  }
+  return text.length;
+}
+
 function AutoSizeInput({ id, name, value, onChange, error, className }: AutoSizeInputProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Cuántos dígitos deben quedar a la izquierda del cursor después de volver a poner los puntos.
+  const caretDigits = useRef<number | null>(null);
+
+  // Al reescribir el valor con puntos de miles, el navegador manda el cursor al final.
+  // Aquí se vuelve a poner donde estaba, contando dígitos y no letras.
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (caretDigits.current === null || !input || document.activeElement !== input) return;
+    const position = positionAfterDigits(value, caretDigits.current);
+    input.setSelectionRange(position, position);
+    caretDigits.current = null;
+  }, [value]);
+
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const raw = event.target.value;
+    const caret = event.target.selectionStart ?? raw.length;
+    let digits = raw.replace(/\D/g, "");
+    let before = raw.slice(0, caret).replace(/\D/g, "").length;
+
+    // Si se borró un punto, en realidad se quería borrar el número que está al lado.
+    const previousDigits = value.replace(/\D/g, "");
+    const inputType = (event.nativeEvent as InputEvent).inputType;
+    if (digits === previousDigits && raw.length < value.length) {
+      if (inputType === "deleteContentBackward" && before > 0) {
+        digits = digits.slice(0, before - 1) + digits.slice(before);
+        before -= 1;
+      } else if (inputType === "deleteContentForward") {
+        digits = digits.slice(0, before) + digits.slice(before + 1);
+      }
+    }
+
+    // Los ceros a la izquierda desaparecen al dar formato: el cursor se corre lo mismo.
+    const leadingZeros = digits.length - digits.replace(/^0+(?=\d)/, "").length;
+    caretDigits.current = Math.max(0, before - leadingZeros);
+    onChange(digits);
+
+    // Si lo escrito no cambia el valor (una letra, por ejemplo), no hay nuevo render que
+    // reubique el cursor: se hace aquí, cuando el navegador termine de pintar.
+    if (formatMoneyInput(digits) === value) {
+      const input = event.target;
+      const position = positionAfterDigits(value, caretDigits.current);
+      caretDigits.current = null;
+      requestAnimationFrame(() => input.setSelectionRange(position, position));
+    }
+  };
+
   return (
     <span className="inline-grid max-w-full min-w-0 items-center">
       <span
@@ -196,8 +257,9 @@ function AutoSizeInput({ id, name, value, onChange, error, className }: AutoSize
         autoComplete="off"
         placeholder="0"
         size={1}
+        ref={inputRef}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={handleChange}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : undefined}
         className={cn(

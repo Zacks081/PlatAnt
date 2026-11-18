@@ -621,3 +621,33 @@ describe("ajustes de la configuración inicial", () => {
     expect(debt).toEqual({ payment_type: "monthly", due_date: null });
   });
 });
+
+describe("de qué quincena sale la tarjeta y cada deuda", () => {
+  it("nacen en mitad y mitad, y el dueño lo puede cambiar", async () => {
+    const card = ok(await ana.client.from("credit_cards").select("split").single());
+    expect(card.split).toBe("half");
+    const changed = await ana.client
+      .from("credit_cards")
+      .update({ split: "first" })
+      .eq("id", anaRows.credit_cards)
+      .select("split")
+      .single();
+    expect(changed.data?.split).toBe("first");
+    const debt = await ana.client
+      .from("debts")
+      .update({ split: "second" })
+      .eq("id", anaRows.debts)
+      .select("split")
+      .single();
+    expect(debt.data?.split).toBe("second");
+  });
+
+  it("otro usuario no lo puede cambiar", async () => {
+    const { data } = await beto.client
+      .from("debts")
+      .update({ split: "first" })
+      .eq("id", anaRows.debts)
+      .select("id");
+    expect(data).toEqual([]);
+  });
+});

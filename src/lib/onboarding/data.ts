@@ -3,10 +3,18 @@ import "server-only";
 import { redirect } from "next/navigation";
 
 import { getCurrentUser, type CurrentUser } from "@/lib/auth/session";
-import { monthsBetween, parseYearMonth, todayInTimeZone, type YearMonth } from "@/lib/dates";
+import {
+  compareDates,
+  parseIsoDate,
+  parseYearMonth,
+  todayInTimeZone,
+  type CalendarDate,
+  type YearMonth,
+} from "@/lib/dates";
 import {
   estimateFreeMoney,
-  goalContributionPerPayment,
+  goalMonthlyContribution,
+  payPeriodForDay,
   type Estimate,
 } from "@/lib/onboarding/estimate";
 import { canOpenStep, currentPath, type StepNumber } from "@/lib/onboarding/steps";
@@ -98,7 +106,7 @@ export async function getCard(db: Supabase) {
   const card = oneOrNone(
     await db
       .from("credit_cards")
-      .select("id, statement_day, payment_day, monthly_rate, rate_is_estimated")
+      .select("id, statement_day, payment_day, monthly_rate, rate_is_estimated, split")
       .maybeSingle(),
   );
   if (!card) return null;
@@ -117,7 +125,7 @@ export async function getDebts(db: Supabase) {
     await db
       .from("debts")
       .select(
-        "id, name, original_amount, installment_amount, payment_day, installments_remaining, payment_type, due_date",
+        "id, name, original_amount, installment_amount, payment_day, installments_remaining, payment_type, due_date, split",
       )
       .is("closed_at", null)
       .order("created_at"),
@@ -129,7 +137,7 @@ export async function getGoals(db: Supabase) {
   return many(
     await db
       .from("goals")
-      .select("id, name, target_amount, target_date")
+      .select("id, name, target_amount, target_date, split")
       .is("achieved_at", null)
       .order("created_at"),
   );
@@ -154,7 +162,19 @@ export type Summary = {
   card: Awaited<ReturnType<typeof getCard>>;
   debts: Awaited<ReturnType<typeof getDebts>>;
   goals: Awaited<ReturnType<typeof getGoals>>;
-  goalPerPayment: number;
+  /** Lo que se aparta al mes para metas. */
+  goalMonthly: number;
+  /** Pagos únicos pendientes, del más cercano al más lejano. No entran en lo libre de cada mes. */
+  pendingPayments: PendingPayment[];
+};
+
+export type PendingPayment = {
+  name: string;
+  amount: number;
+  date: CalendarDate;
+  /** Lo libre que quedaría en la quincena (o el mes) en que cae, después de pagarlo. */
+  freeAfter: number;
+  period: "first" | "second" | "month";
 };
 
 /** Todo lo registrado, con el estimado de plata libre ya calculado. */
@@ -168,46 +188,71 @@ export async function getSummary(db: Supabase, user: CurrentUser): Promise<Summa
   ]);
   const today = todayInTimeZone(user.timeZone);
 
-  // El aporte por pago es la suma de lo que pide cada meta.
-  const goalPerPayment = goals.reduce(
-    (total, goal) =>
-      total +
-      goalContributionPerPayment({
-        targetAmount: goal.target_amount,
-        target: yearMonthOfDate(goal.target_date),
-        today,
-        payFrequency: user.payFrequency,
-      }),
-    0,
-  );
+  const goalContributions = goals.map((goal) => ({
+    monthly: goalMonthlyContribution({
+      targetAmount: goal.target_amount,
+      target: yearMonthOfDate(goal.target_date),
+      today,
+    }),
+    split: goal.split,
+  }));
 
   const estimate = estimateFreeMoney({
     monthlyIncome: user.monthlyIncome ?? 0,
     payFrequency: user.payFrequency,
     payDays: user.payDays,
     fixedExpenses,
-    // Las mensualidades cuentan cada mes; un pago único, solo en el mes en que se paga.
+    // Lo libre «de un mes normal» solo cuenta lo que se repite: las cuotas mensuales.
+    // Los pagos únicos se muestran aparte (ver pendingPayments).
     debts: debts
-      .filter(
-        (debt) =>
-          debt.payment_type === "monthly" ||
-          (debt.due_date !== null && monthsBetween(today, yearMonthOfDate(debt.due_date)) === 0),
-      )
+      .filter((debt) => debt.payment_type === "monthly")
       .map((debt) => ({
         installmentAmount: debt.installment_amount,
         paymentDay: debt.payment_day,
+        split: debt.split,
       })),
     card: card
       ? {
-          paymentDay: card.payment_day,
+          split: card.split,
+          monthlyRate: Number(card.monthly_rate),
           plans: card.plans.map((plan) => ({
+            kind: plan.kind,
             principal: plan.principal,
             installmentsCount: plan.installments_count,
           })),
         }
       : null,
-    goalPerPayment,
+    goals: goalContributions,
   });
 
-  return { estimate, balances, fixedExpenses, card, debts, goals, goalPerPayment };
+  const pendingPayments: PendingPayment[] = debts
+    .filter((debt) => debt.payment_type === "single" && debt.due_date !== null)
+    .map((debt) => {
+      const date = parseIsoDate(debt.due_date!)!;
+      const period = estimate.periods
+        ? payPeriodForDay(date.day, user.payDays)
+        : ("month" as const);
+      const freeBefore = estimate.periods
+        ? estimate.periods[period as "first" | "second"]
+        : estimate.free;
+      return {
+        name: debt.name,
+        amount: debt.original_amount,
+        date,
+        period,
+        freeAfter: freeBefore - debt.original_amount,
+      };
+    })
+    .sort((a, b) => compareDates(a.date, b.date));
+
+  return {
+    estimate,
+    balances,
+    fixedExpenses,
+    card,
+    debts,
+    goals,
+    goalMonthly: estimate.goal,
+    pendingPayments,
+  };
 }

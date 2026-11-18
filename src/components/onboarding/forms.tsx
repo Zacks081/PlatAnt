@@ -19,7 +19,8 @@ import { Button } from "@/components/ui/button";
 import { parseIsoDate, type CalendarDate } from "@/lib/dates";
 import { emptyFormState, type FormState } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
-import { goalContributionPerPayment, type PayFrequency } from "@/lib/onboarding/estimate";
+import { goalMonthlyContribution, type PayFrequency } from "@/lib/onboarding/estimate";
+import { cn } from "@/lib/utils";
 
 /** Formularios del recorrido inicial. Los mismos sirven para editar desde Ajustes. */
 
@@ -53,6 +54,34 @@ function FormShell({ form, submitLabel, children }: ShellProps) {
         </Button>
       </div>
     </form>
+  );
+}
+
+const SPLIT_OPTIONS = [
+  { value: "first", label: "Primera quincena" },
+  { value: "second", label: "Segunda quincena" },
+  { value: "half", label: "Mitad y mitad" },
+];
+
+/** «Sale de»: de cuál pago se aparta la plata. Si se cobra una vez al mes, no se pregunta. */
+function SplitField({
+  form,
+  ask,
+  saved,
+}: {
+  form: ReturnType<typeof useForm>;
+  ask: boolean;
+  saved: string | undefined;
+}) {
+  if (!ask) return <input type="hidden" name="split" value={saved ?? "half"} />;
+  return (
+    <SelectRow
+      name="split"
+      label="Sale de"
+      options={SPLIT_OPTIONS}
+      defaultValue={form.value("split", saved ?? "half")}
+      error={form.errors.split}
+    />
   );
 }
 
@@ -236,21 +265,7 @@ export function FixedExpenseForm({
           defaultValue={form.value("dueDay", initial?.dueDay ?? 30)}
           error={form.errors.dueDay}
         />
-        {askSplit ? (
-          <SelectRow
-            name="split"
-            label="Sale de"
-            options={[
-              { value: "first", label: "Primera quincena" },
-              { value: "second", label: "Segunda quincena" },
-              { value: "half", label: "Mitad y mitad" },
-            ]}
-            defaultValue={form.value("split", initial?.split ?? "half")}
-            error={form.errors.split}
-          />
-        ) : (
-          <input type="hidden" name="split" value={initial?.split ?? "half"} />
-        )}
+        <SplitField form={form} ask={askSplit} saved={initial?.split} />
       </FieldCard>
       {askSplit && (
         <Note>
@@ -267,13 +282,22 @@ export function FixedExpenseForm({
 type CardFormProps = {
   action: Action;
   submitLabel: string;
-  initial: { statementDay: number; paymentDay: number; monthlyRate: string };
+  initial: { statementDay: number; paymentDay: number; monthlyRate: string; split: string };
+  /** Si se cobra por quincena, se pregunta de cuál sale el pago. */
+  askSplit: boolean;
   plans: { href: string; name: string; detail: string; amount: string }[];
   /** Lo que se debe en total, ya con formato; `null` si todavía no hay nada. */
   debtTotal: string | null;
 };
 
-export function CardForm({ action, submitLabel, initial, plans, debtTotal }: CardFormProps) {
+export function CardForm({
+  action,
+  submitLabel,
+  initial,
+  askSplit,
+  plans,
+  debtTotal,
+}: CardFormProps) {
   const form = useForm(action);
 
   return (
@@ -305,6 +329,7 @@ export function CardForm({ action, submitLabel, initial, plans, debtTotal }: Car
           defaultValue={form.value("monthlyRate", initial.monthlyRate)}
           error={form.errors.monthlyRate}
         />
+        <SplitField form={form} ask={askSplit} saved={initial.split} />
       </FieldCard>
 
       <section className="flex flex-col gap-2.5">
@@ -325,7 +350,10 @@ export function CardForm({ action, submitLabel, initial, plans, debtTotal }: Car
       </section>
 
       {debtTotal && <TotalLine label="Debes en total" amount={debtTotal} />}
-      <Note>Si no sabes el interés, déjalo vacío. Mientras tanto usamos 3 %.</Note>
+      <Note>
+        A cada cuota le sumamos el interés del mes. Si no sabes cuánto te cobran, déjalo vacío y
+        usamos 3 %.
+      </Note>
     </FormShell>
   );
 }
@@ -398,6 +426,8 @@ export function PlanForm({ action, initial }: PlanFormProps) {
 type DebtFormProps = {
   action: Action;
   today: CalendarDate;
+  /** Si se cobra por quincena, se pregunta de cuál sale la cuota. */
+  askSplit: boolean;
   initial?: {
     originalAmount: number;
     name: string;
@@ -406,10 +436,11 @@ type DebtFormProps = {
     installmentAmount: number;
     paymentDay: number;
     installmentsRemaining: number;
+    split: string;
   };
 };
 
-export function DebtForm({ action, today, initial }: DebtFormProps) {
+export function DebtForm({ action, today, askSplit, initial }: DebtFormProps) {
   const form = useForm(action);
   const [paymentType, setPaymentType] = useState<string>(
     form.value("paymentType", initial?.paymentType ?? "monthly"),
@@ -458,6 +489,7 @@ export function DebtForm({ action, today, initial }: DebtFormProps) {
             <input type="hidden" name="installmentAmount" value="" />
             <input type="hidden" name="paymentDay" value="" />
             <input type="hidden" name="installmentsRemaining" value="" />
+            <input type="hidden" name="split" value="half" />
           </>
         ) : (
           <>
@@ -484,6 +516,7 @@ export function DebtForm({ action, today, initial }: DebtFormProps) {
               defaultValue={form.value("paymentDay", monthly?.paymentDay ?? 30)}
               error={form.errors.paymentDay}
             />
+            <SplitField form={form} ask={askSplit} saved={monthly?.split} />
             <input type="hidden" name="dueDate" value="" />
           </>
         )}
@@ -498,19 +531,20 @@ type GoalFormProps = {
   action: Action;
   today: CalendarDate;
   payFrequency: PayFrequency;
-  initial?: { targetAmount: number; name: string; targetDate: string };
+  initial?: { targetAmount: number; name: string; targetDate: string; split: string };
 };
 
 export function GoalForm({ action, today, payFrequency, initial }: GoalFormProps) {
   const form = useForm(action);
   const [amount, setAmount] = useState<number | null>(initial?.targetAmount ?? null);
   const [date, setDate] = useState<string>(form.value("targetDate", initial?.targetDate));
+  const [split, setSplit] = useState<string>(form.value("split", initial?.split ?? "half"));
 
   const target = parseIsoDate(date);
-  const perPayment =
-    amount && target
-      ? goalContributionPerPayment({ targetAmount: amount, target, today, payFrequency })
-      : null;
+  // Con el valor y la fecha ya se sabe cuánto apartar al mes.
+  const monthly =
+    amount && target ? goalMonthlyContribution({ targetAmount: amount, target, today }) : null;
+  const askSplit = payFrequency === "biweekly";
 
   return (
     <FormShell form={form} submitLabel="Guardar">
@@ -540,11 +574,48 @@ export function GoalForm({ action, today, payFrequency, initial }: GoalFormProps
           error={form.errors.targetDate}
         />
       </FieldCard>
-      {perPayment !== null && (
-        <TotalLine
-          label={payFrequency === "biweekly" ? "Serían por quincena" : "Serían al mes"}
-          amount={formatMoney(perPayment)}
-        />
+
+      <input type="hidden" name="split" value={askSplit ? split : "half"} />
+      {monthly !== null && (
+        <section className="flex flex-col gap-3.5 rounded-[24px] bg-card p-5">
+          <p className="flex items-baseline justify-between gap-3">
+            <span className="text-muted-foreground">Al mes serían</span>
+            <span className="font-display text-[22px] font-bold tracking-[-0.02em] tabular-nums">
+              {formatMoney(monthly)}
+            </span>
+          </p>
+          {askSplit && (
+            <div className="flex flex-col gap-2.5 border-t border-border pt-3.5">
+              <p id="goal-split-label" className="text-muted-foreground">
+                Este ahorro quieres sacarlo de:
+              </p>
+              <div
+                role="radiogroup"
+                aria-labelledby="goal-split-label"
+                className="flex flex-wrap gap-2"
+              >
+                {SPLIT_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={split === option.value}
+                    onClick={() => setSplit(option.value)}
+                    className={cn(
+                      "flex h-10 items-center rounded-full px-4 font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                      split === option.value
+                        ? "bg-foreground text-background"
+                        : "bg-background text-muted-foreground",
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              {form.errors.split && <p className="text-[13px] text-gasto">{form.errors.split}</p>}
+            </div>
+          )}
+        </section>
       )}
     </FormShell>
   );
