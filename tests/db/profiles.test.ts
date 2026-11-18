@@ -138,11 +138,12 @@ describe("acceso cruzado entre usuarios", () => {
   it("un cambio sin filtro solo toca el perfil propio", async () => {
     const { data } = await ana.client
       .from("profiles")
-      .update({ pay_frequency: "monthly" })
+      .update({ currency: "USD" })
       .neq("name", "")
       .select("id");
     expect(data).toEqual([{ id: ana.id }]);
-    expect((await profileAsAdmin(beto.id)).pay_frequency).toBe("biweekly");
+    expect((await profileAsAdmin(beto.id)).currency).toBe("COP");
+    await ana.client.from("profiles").update({ currency: "COP" }).eq("id", ana.id);
   });
 
   it("no puede borrar perfiles, ni el propio ni el de otro", async () => {

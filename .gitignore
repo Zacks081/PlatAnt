@@ -31,3 +31,6 @@ Thumbs.db
 *.pem
 npm-debug.log*
 pnpm-debug.log*
+
+# Planes de implementación: solo locales
+docs/plans/

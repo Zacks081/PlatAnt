@@ -1,15 +1,15 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Suspense } from "react";
 
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Wordmark } from "@/components/wordmark";
 import { appConfig } from "@/config/app";
-import { getCurrentUser } from "@/lib/auth/session";
-
-import { signOut } from "./(auth)/actions";
+import { requireOnboardedUser } from "@/lib/auth/session";
+import { SETTINGS_PATH } from "@/lib/onboarding/steps";
 
 /**
- * Inicio provisional. Confirma que la sesión y el perfil funcionan;
+ * Inicio provisional. Confirma que la sesión, el perfil y la configuración inicial funcionan;
  * el inicio de verdad (balance, libre para gastar) llega con las issues siguientes.
  */
 export default function HomePage() {
@@ -30,11 +30,12 @@ export default function HomePage() {
         <Welcome />
       </Suspense>
 
-      <form action={signOut} className="mt-2">
-        <Button type="submit" variant="outline" className="w-full">
-          Cerrar sesión
-        </Button>
-      </form>
+      <Link
+        href={SETTINGS_PATH}
+        className={buttonVariants({ variant: "outline", className: "mt-2 w-full" })}
+      >
+        Ajustes
+      </Link>
 
       <p className="mt-5 text-center text-sm text-muted-foreground">
         <Wordmark className="text-foreground" /> · pantalla provisional
@@ -44,7 +45,8 @@ export default function HomePage() {
 }
 
 async function Welcome() {
-  const user = await getCurrentUser();
+  // Quien no ha terminado la configuración inicial va primero al recorrido.
+  const user = await requireOnboardedUser();
 
   return (
     <section className="flex flex-col gap-1.5 rounded-lg border border-estado-bueno-borde bg-estado-bueno-fondo px-5 pt-[22px] pb-5">
@@ -53,8 +55,8 @@ async function Welcome() {
         Hola, {user.name}
       </p>
       <p className="mt-1 text-sm text-estado-bueno-texto">
-        <span className="font-semibold text-estado-bueno">Entraste bien</span> · falta configurar tu
-        plata
+        <span className="font-semibold text-estado-bueno">Ya configuraste tu plata</span> · lo demás
+        llega pronto
       </p>
     </section>
   );
