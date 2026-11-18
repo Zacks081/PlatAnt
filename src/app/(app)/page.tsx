@@ -59,7 +59,7 @@ async function Home() {
               {/* Cada bolsillo abre su pantalla, con su saldo, sus movimientos y el cuadre. */}
               <Link
                 href={POCKET_PATHS[pocket.kind]}
-                className="-m-2 flex min-w-0 flex-col gap-0.5 rounded-2xl p-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="flex min-w-0 flex-col gap-0.5 rounded-[12px] border border-border px-3 py-2.5 outline-none hover:bg-secondary/60 focus-visible:ring-3 focus-visible:ring-ring/50 active:bg-secondary"
               >
                 <span className="flex items-center gap-0.5 text-[13px] text-muted-foreground">
                   {pocket.label}
