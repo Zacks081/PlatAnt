@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CategoryIcon } from "@/components/movements/category-icon";
 import type { CalendarDate } from "@/lib/dates";
 import type { MovementRow } from "@/lib/movements/data";
+import { formatMoney } from "@/lib/money";
 import { dayLabel, POCKET_LABELS, signedAmount } from "@/lib/movements/format";
 import { cn } from "@/lib/utils";
 
@@ -41,16 +42,34 @@ export function MovementList({
           )}
           <ul className="flex flex-col divide-y divide-border rounded-[24px] bg-card px-4">
             {items.map((movement) => {
-              const kind = movement.kind as "expense" | "income";
-              const category = movement.categories?.name ?? "Sin categoría";
+              const kind = movement.kind;
+              const isTransfer = kind === "transfer";
+              const isWithdrawal = isTransfer && movement.pockets?.kind === "account";
               const pocket = POCKET_LABELS[movement.pockets?.kind ?? ""] ?? "";
+              // En un traslado, el «nombre» es qué fue y el detalle, de dónde a dónde.
+              const category = isTransfer
+                ? isWithdrawal
+                  ? "Retiro"
+                  : "Consignación"
+                : (movement.categories?.name ?? "Sin categoría");
+              const where = isTransfer
+                ? `${pocket} → ${POCKET_LABELS[movement.to_pocket?.kind ?? ""] ?? ""}`
+                : pocket;
               return (
                 <li key={movement.id}>
                   <Link
                     href={`/movimiento/${movement.id}?volver=${encodeURIComponent(back)}`}
                     className="flex min-h-16 items-center gap-3 rounded-lg py-2.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                   >
-                    <CategoryIcon icon={movement.categories?.icon} />
+                    <CategoryIcon
+                      icon={
+                        isTransfer
+                          ? isWithdrawal
+                            ? "retiro"
+                            : "consignacion"
+                          : movement.categories?.icon
+                      }
+                    />
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="truncate font-semibold">
                         {movement.description || category}
@@ -58,7 +77,7 @@ export function MovementList({
                       <span className="truncate text-[13px] text-muted-foreground">
                         {[
                           movement.description ? category : null,
-                          pocket,
+                          where,
                           grouped ? null : dayLabel(movement.occurred_on, today),
                         ]
                           .filter(Boolean)
@@ -68,10 +87,12 @@ export function MovementList({
                     <span
                       className={cn(
                         "shrink-0 font-display text-base font-semibold tabular-nums",
-                        kind === "expense" ? "text-foreground" : "text-libre",
+                        kind === "income" ? "text-libre" : "text-foreground",
                       )}
                     >
-                      {signedAmount(kind, movement.amount, currency)}
+                      {isTransfer
+                        ? formatMoney(movement.amount, { currency })
+                        : signedAmount(kind, movement.amount, currency)}
                     </span>
                   </Link>
                 </li>

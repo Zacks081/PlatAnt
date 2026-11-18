@@ -14,6 +14,7 @@ import {
   movementSchema,
   PROTECTED_CATEGORIES,
   safeReturnPath,
+  transferSchema,
 } from "@/lib/movements/validation";
 
 /**
@@ -219,4 +220,58 @@ export async function setCategoryHidden(id: string, hidden: boolean): Promise<vo
     await setFlash(hidden ? "Categoría oculta" : "Categoría visible otra vez");
   }
   finish(CATEGORIES_PATH);
+}
+
+// --- Retiros y consignaciones -----------------------------------------------
+
+/** Guardar un retiro (cuenta → efectivo) o una consignación (efectivo → cuenta). */
+export async function saveTransfer(
+  direction: "withdrawal" | "deposit",
+  id: string | null,
+  back: string,
+  _previous: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const { user, db } = await openApp();
+  const values = readForm(formData, ["amount", "date", "description"]);
+
+  const parsed = transferSchema.safeParse(values);
+  if (!parsed.success) return { errors: firstFieldErrors(parsed.error), values };
+  const transfer = parsed.data;
+
+  if (compareDates(transfer.date, todayInTimeZone(user.timeZone)) > 0) {
+    return { errors: { date: "La fecha no puede ser después de hoy." }, values };
+  }
+
+  const { data: pockets } = await db
+    .from("pockets")
+    .select("id, kind")
+    .in("kind", ["account", "cash"]);
+  const account = pockets?.find((pocket) => pocket.kind === "account")?.id;
+  const cash = pockets?.find((pocket) => pocket.kind === "cash")?.id;
+  if (!account || !cash) return { message: SAVE_ERROR, values };
+  const [from, to] = direction === "withdrawal" ? [account, cash] : [cash, account];
+
+  const row = {
+    amount: transfer.amount,
+    occurred_on: formatIsoDate(transfer.date),
+    description: transfer.description || null,
+  };
+  // Al editar solo cambian el valor, la fecha y la nota: el sentido del traslado es fijo.
+  const { error } = id
+    ? await db
+        .from("movements")
+        .update(row)
+        .eq("id", idSchema.parse(id))
+        .eq("kind", "transfer")
+        .eq("origin", "manual")
+    : await db
+        .from("movements")
+        .insert({ ...row, kind: "transfer", origin: "manual", pocket_id: from, to_pocket_id: to });
+  if (error) return { message: SAVE_ERROR, values };
+
+  await setFlash(
+    `${direction === "withdrawal" ? "Retiro" : "Consignación"} de ${formatMoney(transfer.amount, { currency: user.currency })} ${id ? (direction === "withdrawal" ? "actualizado" : "actualizada") : direction === "withdrawal" ? "guardado" : "guardada"}`,
+  );
+  finish(safeReturnPath(back));
 }

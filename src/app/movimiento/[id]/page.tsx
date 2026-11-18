@@ -4,13 +4,13 @@ import { Suspense } from "react";
 import { z } from "zod";
 
 import { ConfirmDelete } from "@/components/movements/confirm-delete";
-import { MovementForm } from "@/components/movements/movement-form";
+import { MovementForm, TransferForm } from "@/components/movements/movement-form";
 import { ItemHeader, Screen, ScreenFallback } from "@/components/onboarding/screen";
 import { getMovement, openApp } from "@/lib/movements/data";
 import { movementFormData } from "@/lib/movements/form-data";
 import { safeReturnPath } from "@/lib/movements/validation";
 
-import { deleteMovement, saveMovement } from "../../movimientos/actions";
+import { deleteMovement, saveMovement, saveTransfer } from "../../movimientos/actions";
 
 export const metadata: Metadata = { title: "Movimiento" };
 
@@ -31,7 +31,43 @@ async function Movement({ params, searchParams }: Props) {
 
   const { user, db } = await openApp();
   const movement = await getMovement(db, id);
-  if (!movement || (movement.kind !== "expense" && movement.kind !== "income")) notFound();
+  if (!movement) notFound();
+
+  if (movement.kind === "transfer") {
+    const form = await movementFormData(db, user, "expense");
+    const direction = movement.pockets?.kind === "account" ? "withdrawal" : "deposit";
+    const noun = direction === "withdrawal" ? "retiro" : "consignación";
+    return (
+      <Screen>
+        <ItemHeader
+          backHref={back}
+          title={direction === "withdrawal" ? "Retiro" : "Consignación"}
+          action={
+            <ConfirmDelete
+              action={deleteMovement.bind(null, movement.id, back)}
+              title={
+                direction === "withdrawal" ? "¿Borrar este retiro?" : "¿Borrar esta consignación?"
+              }
+              description={`Se quita del historial y la plata vuelve a como estaba antes de ${direction === "withdrawal" ? "este" : "esta"} ${noun}. No se puede deshacer.`}
+            />
+          }
+        />
+        <TransferForm
+          action={saveTransfer.bind(null, direction, movement.id, back)}
+          direction={direction}
+          today={form.today}
+          minDate={form.minDate}
+          initial={{
+            amount: movement.amount,
+            date: movement.occurred_on,
+            description: movement.description ?? undefined,
+          }}
+          autoFocus={false}
+        />
+      </Screen>
+    );
+  }
+
   const kind = movement.kind;
   const form = await movementFormData(db, user, kind, movement.category_id);
   const noun = kind === "expense" ? "gasto" : "ingreso";

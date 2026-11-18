@@ -1,7 +1,7 @@
 import "server-only";
 
 import { requireOnboardedUser, type CurrentUser } from "@/lib/auth/session";
-import { addMonths, formatIsoDate, lastDayOfMonthIso, todayInTimeZone } from "@/lib/dates";
+import type { DateRange, MovementType } from "@/lib/movements/periods";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -66,50 +66,70 @@ export async function getCategories(
 }
 
 const MOVEMENT_FIELDS =
-  "id, kind, amount, occurred_on, description, category_id, pocket_id, categories(name, icon), pockets!movements_user_id_pocket_id_fkey(kind, name)" as const;
+  "id, kind, amount, occurred_on, description, category_id, pocket_id, to_pocket_id, categories(name, icon), pockets!movements_user_id_pocket_id_fkey(kind, name), to_pocket:pockets!movements_user_id_to_pocket_id_fkey(kind)" as const;
 
 export type HistoryFilters = {
-  period: "todo" | "este-mes" | "mes-pasado" | "3-meses";
+  /** Rango de fechas, o `null` para cualquier fecha. */
+  range: DateRange | null;
+  type: MovementType | null;
+  /** Solo cuenta con el tipo «gasto» o «ingreso». */
   categoryId: string | null;
   pocketId: string | null;
 };
 
-/** Movimientos registrados a mano, del más reciente al más antiguo. */
-export async function getMovements(
+const NO_FILTERS: HistoryFilters = { range: null, type: null, categoryId: null, pocketId: null };
+
+/**
+ * Movimientos registrados a mano, del más reciente al más antiguo, de a `limit` por página.
+ * Devuelve también cuántos hay en total con esos filtros, para saber cuántas páginas hay.
+ */
+export async function getMovementsPage(
   db: Db,
-  user: CurrentUser,
-  filters: HistoryFilters = { period: "todo", categoryId: null, pocketId: null },
-  limit = 200,
+  filters: HistoryFilters = NO_FILTERS,
+  { limit, offset = 0 }: { limit: number; offset?: number },
 ) {
   let query = db
     .from("movements")
-    .select(MOVEMENT_FIELDS)
-    .eq("origin", "manual")
-    .in("kind", ["expense", "income"]);
+    .select(MOVEMENT_FIELDS, { count: "exact" })
+    .eq("origin", "manual");
 
-  const today = todayInTimeZone(user.timeZone);
-  const thisMonth = { year: today.year, month: today.month };
-  const firstDay = (month: { year: number; month: number }) => formatIsoDate({ ...month, day: 1 });
-  if (filters.period === "este-mes") query = query.gte("occurred_on", firstDay(thisMonth));
-  if (filters.period === "mes-pasado") {
-    const last = addMonths(thisMonth, -1);
-    query = query.gte("occurred_on", firstDay(last)).lte("occurred_on", lastDayOfMonthIso(last));
+  if (filters.range) {
+    query = query.gte("occurred_on", filters.range.from).lte("occurred_on", filters.range.to);
   }
-  if (filters.period === "3-meses") {
-    query = query.gte("occurred_on", firstDay(addMonths(thisMonth, -2)));
-  }
-  if (filters.categoryId) query = query.eq("category_id", filters.categoryId);
-  if (filters.pocketId) query = query.eq("pocket_id", filters.pocketId);
 
-  return check(
-    await query
-      .order("occurred_on", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(limit),
-  );
+  // Retiro: traslado que sale de la cuenta. Consignación: traslado que sale del efectivo.
+  if (filters.type === "gasto") query = query.eq("kind", "expense");
+  else if (filters.type === "ingreso") query = query.eq("kind", "income");
+  else if (filters.type === "retiro" || filters.type === "consignacion") {
+    const { data: pocket } = await db
+      .from("pockets")
+      .select("id")
+      .eq("kind", filters.type === "retiro" ? "account" : "cash")
+      .maybeSingle();
+    query = query.eq("kind", "transfer").eq("pocket_id", pocket?.id ?? "");
+  } else query = query.in("kind", ["expense", "income", "transfer"]);
+
+  if (filters.categoryId && (filters.type === "gasto" || filters.type === "ingreso")) {
+    query = query.eq("category_id", filters.categoryId);
+  }
+  // Un traslado toca dos bolsillos: aparece al filtrar por cualquiera de los dos.
+  if (filters.pocketId) {
+    query = query.or(`pocket_id.eq.${filters.pocketId},to_pocket_id.eq.${filters.pocketId}`);
+  }
+
+  const result = await query
+    .order("occurred_on", { ascending: false })
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+  return { movements: check(result), total: result.count ?? 0 };
 }
 
-export type MovementRow = Awaited<ReturnType<typeof getMovements>>[number];
+/** Los movimientos más recientes, sin contar el total (para el inicio). */
+export async function getMovements(db: Db, filters: HistoryFilters = NO_FILTERS, limit = 200) {
+  return (await getMovementsPage(db, filters, { limit })).movements;
+}
+
+export type MovementRow = Awaited<ReturnType<typeof getMovementsPage>>["movements"][number];
 
 export async function getMovement(db: Db, id: string) {
   const result = await db

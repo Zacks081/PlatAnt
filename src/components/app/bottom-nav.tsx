@@ -3,10 +3,12 @@
 import {
   ArrowDownLeft,
   ArrowUpRight,
+  Banknote,
   Bot,
   ChartPie,
   CreditCard,
   House,
+  Landmark,
   Plus,
   Target,
   X,
@@ -53,10 +55,16 @@ export function BottomNav() {
           />
           <div
             id="menu-agregar"
-            className="absolute right-[max(1rem,env(safe-area-inset-right))] bottom-[calc(96px+env(safe-area-inset-bottom))] flex flex-col items-end gap-3"
+            // Mismo ancho y márgenes que la barra, para quedar justo encima del botón +
+            // también en pantallas anchas.
+            className="pointer-events-none absolute inset-x-0 bottom-[calc(92px+env(safe-area-inset-bottom))] mx-auto flex w-full max-w-md flex-col items-end gap-3 px-4 *:pointer-events-auto"
           >
             {(
               [
+                // De arriba hacia abajo; el más usado (Gasto) queda pegado al botón +.
+                // Los traslados no son gasto ni ingreso: van en blanco.
+                ["consignacion", "Consignación", "bg-foreground", Landmark],
+                ["retiro", "Retiro", "bg-foreground", Banknote],
                 ["ingreso", "Ingreso", "bg-libre", ArrowDownLeft],
                 ["gasto", "Gasto", "bg-gasto", ArrowUpRight],
               ] as const

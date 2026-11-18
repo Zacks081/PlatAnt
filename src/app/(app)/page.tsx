@@ -24,10 +24,7 @@ export default function HomePage() {
 
 async function Home() {
   const { user, db } = await openApp();
-  const [balances, recent] = await Promise.all([
-    getBalances(db),
-    getMovements(db, user, undefined, 5),
-  ]);
+  const [balances, recent] = await Promise.all([getBalances(db), getMovements(db, undefined, 5)]);
   const money = (amount: number) => formatMoney(amount, { currency: user.currency });
 
   return (

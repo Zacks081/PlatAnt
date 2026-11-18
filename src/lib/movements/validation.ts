@@ -32,6 +32,9 @@ export const movementSchema = z.object({
   description: z.string().trim().max(140, "Puede tener máximo 140 caracteres."),
 });
 
+/** Retiro o consignación: solo el valor, la fecha y una nota opcional. */
+export const transferSchema = movementSchema.pick({ amount: true, date: true, description: true });
+
 export const categorySchema = z.object({
   name: z.string().trim().min(1, "Ponle un nombre.").max(40, "Puede tener máximo 40 caracteres."),
   icon: z.string().regex(/^[a-z-]{1,30}$/, "Elige un ícono."),

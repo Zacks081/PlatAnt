@@ -1,5 +1,7 @@
 import {
+  ArrowLeftRight,
   Baby,
+  Banknote,
   Beer,
   BookOpen,
   Briefcase,
@@ -64,6 +66,12 @@ export const CATEGORY_ICONS: Record<string, { icon: LucideIcon; label: string }>
 
 export const ICON_KEYS = Object.keys(CATEGORY_ICONS);
 
+/** Íconos de los traslados: se muestran en el historial, pero no se eligen para una categoría. */
+const TRANSFER_ICONS: Record<string, LucideIcon> = {
+  retiro: Banknote,
+  consignacion: ArrowLeftRight,
+};
+
 /** Ícono de una categoría dentro de un círculo. Si la clave no existe, usa «otros». */
 export function CategoryIcon({
   icon,
@@ -74,7 +82,8 @@ export function CategoryIcon({
   tone?: "neutral" | "gasto" | "libre";
   className?: string;
 }) {
-  const Icon = (CATEGORY_ICONS[icon ?? ""] ?? CATEGORY_ICONS.otros).icon;
+  const Icon =
+    TRANSFER_ICONS[icon ?? ""] ?? (CATEGORY_ICONS[icon ?? ""] ?? CATEGORY_ICONS.otros).icon;
   return (
     <span
       aria-hidden="true"

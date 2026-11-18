@@ -287,8 +287,8 @@ type HeroMoneyProps = {
   /** Qué valor es; lo lee el lector de pantalla. */
   label: string;
   defaultValue?: string | number | null;
-  /** Verde si es plata a favor, coral si es plata que sale. */
-  tone: "libre" | "gasto";
+  /** Verde si es plata a favor, coral si es plata que sale, blanco si solo cambia de lugar. */
+  tone: "libre" | "gasto" | "neutral";
   error?: string;
   /** Avisa el monto cada vez que cambia, para cálculos en vivo. */
   onValueChange?: (amount: number | null) => void;
@@ -321,7 +321,10 @@ export function HeroMoney({
         <span className="sr-only">{label}</span>
         <span
           aria-hidden="true"
-          className={cn("text-[38px]", tone === "libre" ? "text-libre" : "text-gasto")}
+          className={cn(
+            "text-[38px]",
+            tone === "libre" ? "text-libre" : tone === "gasto" ? "text-gasto" : "text-foreground",
+          )}
         >
           $
         </span>
@@ -335,7 +338,11 @@ export function HeroMoney({
           className={cn(
             "py-1 leading-none placeholder:text-muted-foreground",
             size,
-            tone === "libre" ? "caret-libre" : "caret-gasto",
+            tone === "libre"
+              ? "caret-libre"
+              : tone === "gasto"
+                ? "caret-gasto"
+                : "caret-foreground",
           )}
         />
       </label>
