@@ -31,9 +31,8 @@ export const MAX_CUSTOM_DAYS = 30;
 export type DateRange = { from: string; to: string };
 
 /**
- * La quincena actual y la anterior, con los días de pago del usuario (por ejemplo, 15 y 30).
- * Una quincena va de un día de pago al día antes del siguiente. Es una aproximación con el
- * calendario: la quincena real, desde el día en que te pagaron, llega con la issue 6.
+ * La quincena actual y la anterior según el calendario, con los días de pago del usuario
+ * (por ejemplo, 15 y 30). Se usa solo mientras no haya quincenas registradas con «Me pagaron».
  */
 function payPeriods(today: CalendarDate, payDays: readonly number[]) {
   const [first, second] = payDays;
@@ -67,16 +66,21 @@ function payPeriods(today: CalendarDate, payDays: readonly number[]) {
   };
 }
 
+/** Cuándo empezaron la quincena en curso y la anterior, según los pagos registrados. */
+export type RegisteredPeriods = { current: string; previous: string | null };
+
 /**
  * El rango de fechas de un filtro. Sin filtro (`null`), los últimos tres meses: lo anterior
  * no se borra (sirve para los informes), pero se busca con las fechas personalizadas.
  * Un rango personalizado inválido (al revés o de más de 30 días) devuelve un error para mostrar.
+ * Las quincenas van desde el día en que llegó cada pago, si ya hay pagos registrados.
  */
 export function periodRange(
   period: Period | null,
   today: CalendarDate,
   payDays: readonly number[],
   custom: { from: string | null; to: string | null },
+  registered: RegisteredPeriods | null = null,
 ): { range: DateRange | null; error?: string } {
   const iso = formatIsoDate;
   const thisMonth = { year: today.year, month: today.month };
@@ -88,8 +92,13 @@ export function periodRange(
       return { range: { from: yesterday, to: yesterday } };
     }
     case "esta-quincena":
+      if (registered) return { range: { from: registered.current, to: iso(today) } };
       return { range: payDays.length === 2 ? payPeriods(today, payDays).current : null };
     case "quincena-pasada":
+      if (registered?.previous) {
+        const end = addDays(parseIsoDate(registered.current)!, -1);
+        return { range: { from: registered.previous, to: iso(end) } };
+      }
       return { range: payDays.length === 2 ? payPeriods(today, payDays).previous : null };
     case "este-mes":
       return { range: { from: iso({ ...thisMonth, day: 1 }), to: iso(today) } };

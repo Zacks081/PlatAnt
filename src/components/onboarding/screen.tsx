@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { completeStep } from "@/app/configuracion/actions";
+import { FreshOnNavigation } from "@/components/app/fresh-on-navigation";
 import { buttonVariants } from "@/components/ui/button";
 import type { CurrentUser } from "@/lib/auth/session";
 import {
@@ -22,7 +23,7 @@ const focusRing = "outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 export function Screen({ children }: { children: ReactNode }) {
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 px-4 pt-3 pb-6">
-      {children}
+      <FreshOnNavigation>{children}</FreshOnNavigation>
     </main>
   );
 }
@@ -177,7 +178,7 @@ export function ItemList({ items }: { items: Item[] }) {
 /** Botón secundario para agregar un elemento a una lista. */
 export function AddLink({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <Link href={href} className={buttonVariants({ variant: "outline", className: "h-12 w-full" })}>
+    <Link href={href} className={cn(buttonVariants({ variant: "outline" }), "h-12 w-full")}>
       <Plus aria-hidden="true" className="size-[18px]" />
       {children}
     </Link>

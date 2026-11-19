@@ -32,17 +32,25 @@ export async function getBalances(db: Db) {
   const account = Number(find("account")?.balance ?? 0);
   const cash = Number(find("cash")?.balance ?? 0);
   const card = find("credit_card");
+  // La plata de los bolsillos de los gastos fijos también es tuya: suma en el balance.
+  const pockets = rows
+    .filter((row) => row.kind === "fixed_expense")
+    .reduce((total, row) => total + Number(row.balance), 0);
   return {
     account,
     cash,
-    total: account + cash,
+    pockets,
+    total: account + cash + pockets,
     /** Lo que se debe en la tarjeta (positivo), o `null` si no hay tarjeta. */
     cardDebt: card ? -Number(card.balance) : null,
   };
 }
 
 export async function getPockets(db: Db) {
-  return check(await db.from("pockets").select("id, kind, name").order("kind"));
+  // Los bolsillos de los gastos fijos se manejan desde su propia pantalla, no en los formularios.
+  return check(
+    await db.from("pockets").select("id, kind, name").neq("kind", "fixed_expense").order("kind"),
+  );
 }
 
 /** Categorías de un tipo, en orden alfabético y con «Otros» al final. */
@@ -66,7 +74,7 @@ export async function getCategories(
 }
 
 const MOVEMENT_FIELDS =
-  "id, kind, origin, amount, occurred_on, description, category_id, pocket_id, to_pocket_id, categories(name, icon), pockets!movements_user_id_pocket_id_fkey(kind, name), to_pocket:pockets!movements_user_id_to_pocket_id_fkey(kind), installment_plans(installments_count)" as const;
+  "id, kind, origin, amount, occurred_on, description, category_id, pocket_id, to_pocket_id, categories(name, icon), pockets!movements_user_id_pocket_id_fkey(kind, name, fixed_expense_id), to_pocket:pockets!movements_user_id_to_pocket_id_fkey(kind, name, fixed_expense_id), installment_plans(installments_count)" as const;
 
 export type HistoryFilters = {
   /** Rango de fechas, o `null` para cualquier fecha. */
@@ -79,8 +87,11 @@ export type HistoryFilters = {
 
 const NO_FILTERS: HistoryFilters = { range: null, type: null, categoryId: null, pocketId: null };
 
-/** Lo que se ve en el historial: lo registrado a mano y los ajustes del cuadre de saldo. */
-const HISTORY_ORIGINS = ["manual", "reconciliation"] as const;
+/**
+ * Lo que se ve en el historial: lo registrado a mano, los ajustes del cuadre de saldo, los
+ * pagos de «Me pagaron» y lo que cada quincena pasa sola a los bolsillos.
+ */
+const HISTORY_ORIGINS = ["manual", "reconciliation", "payday", "set_aside"] as const;
 
 /**
  * Movimientos del historial, del más reciente al más antiguo, de a `limit` por página.
@@ -100,16 +111,18 @@ export async function getMovementsPage(
     query = query.gte("occurred_on", filters.range.from).lte("occurred_on", filters.range.to);
   }
 
-  // Retiro: traslado que sale de la cuenta. Consignación: traslado que sale del efectivo.
+  // Retiro: de la cuenta al efectivo. Consignación: del efectivo a la cuenta. (Lo que pasa a
+  // los bolsillos de los gastos fijos también es un traslado, pero no es ninguno de los dos.)
   if (filters.type === "gasto") query = query.eq("kind", "expense");
   else if (filters.type === "ingreso") query = query.eq("kind", "income");
   else if (filters.type === "retiro" || filters.type === "consignacion") {
-    const { data: pocket } = await db
+    const { data: pockets } = await db
       .from("pockets")
-      .select("id")
-      .eq("kind", filters.type === "retiro" ? "account" : "cash")
-      .maybeSingle();
-    query = query.eq("kind", "transfer").eq("pocket_id", pocket?.id ?? "");
+      .select("id, kind")
+      .in("kind", ["account", "cash"]);
+    const idOf = (kind: string) => pockets?.find((pocket) => pocket.kind === kind)?.id ?? "";
+    const [from, to] = filters.type === "retiro" ? ["account", "cash"] : ["cash", "account"];
+    query = query.eq("kind", "transfer").eq("pocket_id", idOf(from)).eq("to_pocket_id", idOf(to));
   } else query = query.in("kind", ["expense", "income", "transfer"]);
 
   if (filters.categoryId && (filters.type === "gasto" || filters.type === "ingreso")) {

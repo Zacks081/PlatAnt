@@ -4,7 +4,7 @@ import { CategoryIcon } from "@/components/movements/category-icon";
 import type { CalendarDate } from "@/lib/dates";
 import type { MovementRow } from "@/lib/movements/data";
 import { formatMoney } from "@/lib/money";
-import { dayLabel, POCKET_LABELS, signedAmount } from "@/lib/movements/format";
+import { dayLabel, PAYDAY_LABEL, POCKET_LABELS, signedAmount } from "@/lib/movements/format";
 import { reconciliationLabel } from "@/lib/pockets/pockets";
 import { cn } from "@/lib/utils";
 
@@ -45,21 +45,32 @@ export function MovementList({
             {items.map((movement) => {
               const kind = movement.kind;
               const isTransfer = kind === "transfer";
+              // Plata que entra o sale del bolsillo de un gasto fijo.
+              const fromFixed = movement.pockets?.kind === "fixed_expense";
+              const toFixed = movement.to_pocket?.kind === "fixed_expense";
+              const isPocketMove = isTransfer && (fromFixed || toFixed);
               const isWithdrawal = isTransfer && movement.pockets?.kind === "account";
               // Lo que registró un cuadre de saldo: no tiene categoría, tiene nombre propio.
               const isReconciliation = !isTransfer && movement.origin === "reconciliation";
-              const pocket = POCKET_LABELS[movement.pockets?.kind ?? ""] ?? "";
+              const isPayday = movement.origin === "payday";
+              const pocket = pocketLabel(movement.pockets);
               // En un traslado, el «nombre» es qué fue y el detalle, de dónde a dónde.
-              const category = isTransfer
-                ? isWithdrawal
-                  ? "Retiro"
-                  : "Consignación"
-                : isReconciliation
-                  ? reconciliationLabel(kind)
-                  : (movement.categories?.name ?? "Sin categoría");
+              const category = isPocketMove
+                ? toFixed
+                  ? `Apartado ${movement.to_pocket?.name ?? ""}`
+                  : `Sacado de ${movement.pockets?.name ?? ""}`
+                : isTransfer
+                  ? isWithdrawal
+                    ? "Retiro"
+                    : "Consignación"
+                  : isReconciliation
+                    ? reconciliationLabel(kind)
+                    : isPayday
+                      ? PAYDAY_LABEL
+                      : (movement.categories?.name ?? "Sin categoría");
               const installments = movement.installment_plans[0]?.installments_count ?? 1;
               const where = isTransfer
-                ? `${pocket} → ${POCKET_LABELS[movement.to_pocket?.kind ?? ""] ?? ""}`
+                ? `${pocket} → ${pocketLabel(movement.to_pocket)}`
                 : isReconciliation
                   ? `Cuadre de ${pocket.toLowerCase()}`
                   : installments > 1
@@ -73,13 +84,15 @@ export function MovementList({
                   >
                     <CategoryIcon
                       icon={
-                        isTransfer
-                          ? isWithdrawal
-                            ? "retiro"
-                            : "consignacion"
-                          : isReconciliation
-                            ? "cuadre"
-                            : movement.categories?.icon
+                        isPocketMove
+                          ? "bolsillo"
+                          : isTransfer
+                            ? isWithdrawal
+                              ? "retiro"
+                              : "consignacion"
+                            : isReconciliation
+                              ? "cuadre"
+                              : movement.categories?.icon
                       }
                     />
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -115,4 +128,10 @@ export function MovementList({
       ))}
     </div>
   );
+}
+
+/** «Cuenta», «Efectivo», «Tarjeta» o, en un bolsillo de gasto fijo, su nombre. */
+function pocketLabel(pocket: { kind: string; name: string } | null | undefined): string {
+  if (!pocket) return "";
+  return POCKET_LABELS[pocket.kind] ?? pocket.name;
 }

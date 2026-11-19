@@ -5,16 +5,25 @@ import { Suspense } from "react";
 import { MovementList } from "@/components/movements/movement-list";
 import { Screen, ScreenFallback } from "@/components/onboarding/screen";
 import { Wordmark } from "@/components/wordmark";
-import { todayInTimeZone } from "@/lib/dates";
+import { buttonVariants } from "@/components/ui/button";
+import { formatIsoDate, todayInTimeZone } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
+import { onDayLabel } from "@/lib/movements/format";
 import { getBalances, getMovements, openApp } from "@/lib/movements/data";
-import { POCKET_NOUNS, POCKET_PATHS } from "@/lib/pockets/pockets";
 import { SETTINGS_PATH } from "@/lib/onboarding/steps";
+import { getPayOverview } from "@/lib/pay-periods/data";
+import {
+  inDaysLabel,
+  paidCountLabel,
+  PERIOD_WORDS,
+  QUINCENA_PATH,
+} from "@/lib/pay-periods/summary";
+import { POCKET_NOUNS, POCKET_PATHS } from "@/lib/pockets/pockets";
 import { cn } from "@/lib/utils";
 
 /**
- * Inicio. Por ahora: lo que tienes (la cifra principal) y los últimos movimientos.
- * «Hoy puedes gastar» y «Lo que viene» llegan con sus issues.
+ * Inicio. Por ahora: lo que tienes (la cifra principal), la quincena y los últimos movimientos.
+ * «Hoy puedes gastar» llega con la issue 7.
  */
 export default function HomePage() {
   return (
@@ -26,14 +35,23 @@ export default function HomePage() {
 
 async function Home() {
   const { user, db } = await openApp();
-  const [balances, recent] = await Promise.all([getBalances(db), getMovements(db, undefined, 5)]);
+  const [balances, recent, pay] = await Promise.all([
+    getBalances(db),
+    getMovements(db, undefined, 5),
+    getPayOverview(db, user),
+  ]);
   const money = (amount: number) => formatMoney(amount, { currency: user.currency });
   const pockets = [
-    { kind: "account", label: "En la cuenta", amount: balances.account },
-    { kind: "cash", label: "En efectivo", amount: balances.cash },
+    { kind: "account", label: "Cuenta", amount: balances.account },
+    { kind: "cash", label: "Efectivo", amount: balances.cash },
   ] as const;
   // Un bolsillo puede quedar en negativo: se avisa, pero no se bloquea.
   const negative = pockets.filter((pocket) => pocket.amount < 0);
+  // Cuenta, efectivo y la plata de los bolsillos de los gastos fijos, que se ven en la quincena.
+  const tiles = [
+    ...pockets.map((pocket) => ({ ...pocket, href: POCKET_PATHS[pocket.kind] })),
+    { kind: "pockets", label: "Bolsillos", amount: balances.pockets, href: QUINCENA_PATH },
+  ];
 
   return (
     <Screen>
@@ -53,12 +71,17 @@ async function Home() {
         <p className="font-display text-[clamp(40px,13vw,52px)] leading-[1.05] font-bold tracking-[-0.03em] tabular-nums">
           {money(balances.total)}
         </p>
-        <ul className="mt-3.5 grid grid-cols-2 gap-3 border-t border-border pt-3.5">
-          {pockets.map((pocket) => (
-            <li key={pocket.kind} className="min-w-0">
+        {/* Cuenta y efectivo lado a lado; los bolsillos debajo, a lo ancho, para que las cifras
+            quepan completas en un celular angosto. */}
+        <ul className="mt-3.5 grid grid-cols-2 gap-2.5 border-t border-border pt-3.5">
+          {tiles.map((pocket) => (
+            <li
+              key={pocket.kind}
+              className={cn("min-w-0", pocket.kind === "pockets" && "col-span-2")}
+            >
               {/* Cada bolsillo abre su pantalla, con su saldo, sus movimientos y el cuadre. */}
               <Link
-                href={POCKET_PATHS[pocket.kind]}
+                href={pocket.href}
                 className="flex min-w-0 flex-col gap-0.5 rounded-[12px] border border-border px-3 py-2.5 outline-none hover:bg-secondary/60 focus-visible:ring-3 focus-visible:ring-ring/50 active:bg-secondary"
               >
                 <span className="flex items-center gap-0.5 text-[13px] text-muted-foreground">
@@ -89,6 +112,8 @@ async function Home() {
         )}
       </section>
 
+      <PayPeriodCards overview={pay} money={money} title={PERIOD_WORDS[user.payFrequency].title} />
+
       <section className="flex flex-col gap-2.5">
         <div className="flex items-center justify-between gap-3 px-1">
           <h2 className="font-display text-lg font-semibold">Últimos movimientos</h2>
@@ -115,6 +140,75 @@ async function Home() {
         )}
       </section>
     </Screen>
+  );
+}
+
+/**
+ * La quincena en Inicio. Cerca del próximo pago (desde PAY_WINDOW_DAYS antes) o antes del
+ * primero, arriba aparece «¿Ya te pagaron?» con el botón para registrarlo; la tarjeta de la
+ * quincena sigue debajo hasta que se registre el pago.
+ */
+function PayPeriodCards({
+  overview: { today, period, pocketTotals, next },
+  money,
+  title,
+}: {
+  overview: Awaited<ReturnType<typeof getPayOverview>>;
+  money: (amount: number) => string;
+  title: string;
+}) {
+  const nextOn = onDayLabel(formatIsoDate(next.date), today);
+  const when =
+    next.days < 0
+      ? `Lo esperábamos ${nextOn}.`
+      : next.days === 0
+        ? "Según tus días de pago, te pagan hoy."
+        : `Te pagan ${nextOn}, ${inDaysLabel(next.days)}.`;
+
+  return (
+    <>
+      {(!period || next.open) && (
+        <section className="flex flex-col gap-3 rounded-[28px] bg-card p-5">
+          <h2 className="font-display text-lg font-semibold">¿Ya te pagaron?</h2>
+          <p className="-mt-1.5 text-muted-foreground">
+            {!period
+              ? `Regístralo para empezar a apartar. Lo esperamos ${nextOn}${next.days > 0 ? `, ${inDaysLabel(next.days)}` : ""}.`
+              : `${when} Cuando te llegue, regístralo.`}
+          </p>
+          <Link
+            href={`/me-pagaron?volver=${encodeURIComponent("/")}`}
+            className={buttonVariants({ className: "w-full" })}
+          >
+            Me pagaron
+          </Link>
+        </section>
+      )}
+
+      {period && (
+        <Link
+          href={QUINCENA_PATH}
+          className="flex flex-col gap-1 rounded-[28px] bg-card p-5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:bg-secondary"
+        >
+          <span className="flex items-center justify-between gap-3">
+            <span className="font-display text-lg font-semibold">{title}</span>
+            <ChevronRight aria-hidden="true" className="size-5 text-muted-foreground" />
+          </span>
+          <span className="text-muted-foreground">{when}</span>
+          <span className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-border pt-3">
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden="true" className="size-2 rounded-full bg-apartado" />
+              <span className="text-muted-foreground">En bolsillos</span>
+              <span className="font-display font-bold tabular-nums">
+                {money(pocketTotals.inPockets)}
+              </span>
+            </span>
+            <span className="text-[13px] text-muted-foreground">
+              · {paidCountLabel(pocketTotals.paidCount, pocketTotals.count)}
+            </span>
+          </span>
+        </Link>
+      )}
+    </>
   );
 }
 

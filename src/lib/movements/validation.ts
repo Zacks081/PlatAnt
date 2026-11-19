@@ -45,6 +45,14 @@ export const transferSchema = movementSchema
   .pick({ amount: true, date: true, description: true })
   .extend({ fee: optionalAmount });
 
+/** Apartar, sacar o pagar desde el bolsillo de un gasto fijo: el valor y la fecha. */
+export const pocketMoneySchema = movementSchema.pick({ amount: true, date: true });
+
+/** «Me pagaron»: cuánto llegó de verdad, cuándo y si entró a la cuenta o en efectivo. */
+export const paySchema = movementSchema
+  .pick({ amount: true, date: true })
+  .extend({ pocket: z.enum(["account", "cash"], "Elige dónde te pagaron.") });
+
 /** Cuadre: cuánto hay de verdad (puede ser 0) y el saldo que la app mostraba al cuadrar. */
 export const reconcileSchema = z.object({
   actual: z

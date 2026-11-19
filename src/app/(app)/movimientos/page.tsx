@@ -17,6 +17,7 @@ import {
 } from "@/lib/movements/data";
 import { POCKET_LABELS } from "@/lib/movements/format";
 import { MOVEMENT_TYPES, PERIODS, periodRange } from "@/lib/movements/periods";
+import { getRecentPeriods } from "@/lib/pay-periods/data";
 
 export const metadata: Metadata = { title: "Movimientos" };
 
@@ -49,7 +50,12 @@ async function Movements({ searchParams }: Props) {
   const period = periods.find((option) => option.value === one(params.periodo))?.value ?? null;
   const type = MOVEMENT_TYPES.find((option) => option.value === one(params.tipo))?.value ?? null;
   const custom = { from: one(params.desde) ?? null, to: one(params.hasta) ?? null };
-  const { range, error: rangeError } = periodRange(period, today, user.payDays, custom);
+  // Con pagos registrados, «esta quincena» empieza el día en que de verdad te pagaron.
+  const [current, previous] = period?.includes("quincena") ? await getRecentPeriods(db, 2) : [];
+  const registered = current
+    ? { current: current.started_on, previous: previous?.started_on ?? null }
+    : null;
+  const { range, error: rangeError } = periodRange(period, today, user.payDays, custom, registered);
 
   const categoryKind = type === "gasto" ? "expense" : type === "ingreso" ? "income" : null;
   const filters: Filters = {

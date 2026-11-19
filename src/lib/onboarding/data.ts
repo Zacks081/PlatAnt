@@ -86,7 +86,8 @@ export async function getOpeningBalances(db: Supabase) {
   const balances = { account: 0, cash: 0, credit_card: 0 };
   for (const opening of openings) {
     const kind = opening.pockets?.kind;
-    if (kind) balances[kind] = opening.amount;
+    // Los bolsillos de gastos fijos tienen su propio saldo inicial (lo de antes de la app).
+    if (kind && kind !== "fixed_expense") balances[kind] = opening.amount;
   }
   return balances;
 }

@@ -189,7 +189,12 @@ export async function saveMovement(
     .select("kind")
     .eq("id", movement.pocketId)
     .maybeSingle();
-  if (!pocket || (kind === "income" && pocket.kind === "credit_card")) {
+  // Los bolsillos de los gastos fijos se manejan desde su pantalla, no desde este formulario.
+  if (
+    !pocket ||
+    pocket.kind === "fixed_expense" ||
+    (kind === "income" && pocket.kind === "credit_card")
+  ) {
     return {
       errors: { pocketId: kind === "income" ? "Elige a dónde entra." : "Elige de dónde sale." },
       values,
