@@ -48,6 +48,7 @@ export function MovementList({
               const isWithdrawal = isTransfer && movement.pockets?.kind === "account";
               // Lo que registró un cuadre de saldo: no tiene categoría, tiene nombre propio.
               const isReconciliation = !isTransfer && movement.origin === "reconciliation";
+              const isPayday = movement.origin === "payday";
               const pocket = POCKET_LABELS[movement.pockets?.kind ?? ""] ?? "";
               // En un traslado, el «nombre» es qué fue y el detalle, de dónde a dónde.
               const category = isTransfer
@@ -56,7 +57,9 @@ export function MovementList({
                   : "Consignación"
                 : isReconciliation
                   ? reconciliationLabel(kind)
-                  : (movement.categories?.name ?? "Sin categoría");
+                  : isPayday
+                    ? "Me pagaron"
+                    : (movement.categories?.name ?? "Sin categoría");
               const installments = movement.installment_plans[0]?.installments_count ?? 1;
               const where = isTransfer
                 ? `${pocket} → ${POCKET_LABELS[movement.to_pocket?.kind ?? ""] ?? ""}`

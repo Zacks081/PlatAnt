@@ -177,7 +177,7 @@ export function ItemList({ items }: { items: Item[] }) {
 /** Botón secundario para agregar un elemento a una lista. */
 export function AddLink({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <Link href={href} className={buttonVariants({ variant: "outline", className: "h-12 w-full" })}>
+    <Link href={href} className={cn(buttonVariants({ variant: "outline" }), "h-12 w-full")}>
       <Plus aria-hidden="true" className="size-[18px]" />
       {children}
     </Link>

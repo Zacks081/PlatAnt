@@ -79,8 +79,11 @@ export type HistoryFilters = {
 
 const NO_FILTERS: HistoryFilters = { range: null, type: null, categoryId: null, pocketId: null };
 
-/** Lo que se ve en el historial: lo registrado a mano y los ajustes del cuadre de saldo. */
-const HISTORY_ORIGINS = ["manual", "reconciliation"] as const;
+/**
+ * Lo que se ve en el historial: lo registrado a mano, los ajustes del cuadre de saldo y los
+ * pagos de «Me pagaron».
+ */
+const HISTORY_ORIGINS = ["manual", "reconciliation", "payday"] as const;
 
 /**
  * Movimientos del historial, del más reciente al más antiguo, de a `limit` por página.

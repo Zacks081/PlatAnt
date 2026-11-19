@@ -1,7 +1,7 @@
 "use client";
 
 import { Check } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const FLASH_COOKIE = "platant-aviso";
@@ -20,13 +20,15 @@ function takeFlash(): string | null {
 /** Aviso corto arriba de la pantalla después de guardar algo. Se va solo a los 3 segundos. */
 export function Toast() {
   const pathname = usePathname();
+  // Una acción que vuelve a la misma pantalla (como «Ya pagué») cambia solo los parámetros.
+  const search = useSearchParams().toString();
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     // Leer la cookie solo se puede en el navegador; el aviso aparece justo después de cargar.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMessage(takeFlash());
-  }, [pathname]);
+  }, [pathname, search]);
 
   useEffect(() => {
     if (!message) return;

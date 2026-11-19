@@ -44,6 +44,13 @@ export function dayLabel(
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+/** Para una frase: «hoy», «ayer» o «el vie 13 nov». */
+export function onDayLabel(isoDate: string, today: CalendarDate): string {
+  const label = dayLabel(isoDate, today);
+  if (label === "Hoy" || label === "Ayer") return label.toLowerCase();
+  return `el ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+}
+
 export const POCKET_LABELS: Record<string, string> = {
   account: "Cuenta",
   cash: "Efectivo",

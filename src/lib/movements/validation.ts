@@ -45,6 +45,9 @@ export const transferSchema = movementSchema
   .pick({ amount: true, date: true, description: true })
   .extend({ fee: optionalAmount });
 
+/** «Me pagaron»: cuánto llegó de verdad y cuándo. */
+export const paySchema = movementSchema.pick({ amount: true, date: true });
+
 /** Cuadre: cuánto hay de verdad (puede ser 0) y el saldo que la app mostraba al cuadrar. */
 export const reconcileSchema = z.object({
   actual: z

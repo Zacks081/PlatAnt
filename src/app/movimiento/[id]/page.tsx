@@ -6,14 +6,17 @@ import { z } from "zod";
 import { ConfirmDelete } from "@/components/movements/confirm-delete";
 import { MovementForm, TransferForm } from "@/components/movements/movement-form";
 import { ItemHeader, Screen, ScreenFallback } from "@/components/onboarding/screen";
+import { PaydayForm } from "@/components/pay-periods/payday-form";
 import { formatMoney } from "@/lib/money";
 import { getMovement, getTransferFee, openApp } from "@/lib/movements/data";
 import { dayLabel, POCKET_LABELS } from "@/lib/movements/format";
 import { movementFormData } from "@/lib/movements/form-data";
 import { safeReturnPath } from "@/lib/movements/validation";
+import { getRecentPeriods } from "@/lib/pay-periods/data";
 import { reconciliationLabel } from "@/lib/pockets/pockets";
-import { todayInTimeZone } from "@/lib/dates";
+import { addDays, todayInTimeZone } from "@/lib/dates";
 
+import { deletePay, updatePay } from "../../(app)/quincena/actions";
 import { deleteMovement, saveMovement, saveTransfer } from "../../movimientos/actions";
 
 export const metadata: Metadata = { title: "Movimiento" };
@@ -72,6 +75,58 @@ async function Movement({ params, searchParams }: Props) {
           }}
           autoFocus={false}
         />
+      </Screen>
+    );
+  }
+
+  // Un pago de «Me pagaron»: se corrige con su propio formulario, porque abrió una quincena.
+  // Solo el último: los anteriores ya son historia.
+  if (movement.origin === "payday") {
+    const [latest] = await getRecentPeriods(db, 1);
+    const today = todayInTimeZone(user.timeZone);
+    if (latest?.movement_id === movement.id) {
+      return (
+        <Screen>
+          <ItemHeader
+            backHref={back}
+            title="Me pagaron"
+            action={
+              <ConfirmDelete
+                action={deletePay.bind(null, latest.id, back)}
+                title="¿Borrar este pago?"
+                description="Se quita el ingreso de tu cuenta y se cierra la quincena que abrió, con sus apartados. No se puede deshacer."
+              />
+            }
+          />
+          <PaydayForm
+            action={updatePay.bind(null, latest.id, back)}
+            today={today}
+            minDate={addDays(today, -62)}
+            initial={{ amount: movement.amount, date: movement.occurred_on }}
+            note="Si cambias el valor o la fecha, los apartados de la quincena se ajustan solos."
+            autoFocus={false}
+          />
+        </Screen>
+      );
+    }
+    return (
+      <Screen>
+        <ItemHeader backHref={back} title="Me pagaron" />
+        <dl className="flex flex-col divide-y divide-border rounded-[24px] bg-card px-5">
+          {[
+            ["Valor", formatMoney(movement.amount, { currency: user.currency })],
+            ["Bolsillo", "Cuenta"],
+            ["Fecha", dayLabel(movement.occurred_on, today)],
+          ].map(([term, detail]) => (
+            <div key={term} className="flex min-h-14 items-center justify-between gap-3">
+              <dt className="text-muted-foreground">{term}</dt>
+              <dd className="font-semibold tabular-nums">{detail}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="px-1 text-[13px] text-muted-foreground">
+          Este pago abrió una quincena que ya terminó. Solo se puede corregir el último pago.
+        </p>
       </Screen>
     );
   }
