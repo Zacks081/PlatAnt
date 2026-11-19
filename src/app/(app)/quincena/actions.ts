@@ -17,23 +17,27 @@ import {
   instanceFromRow,
   instanceKey,
   matchPay,
-  nominalPayDate,
   payMonthIso,
+  payOptions,
 } from "@/lib/pay-periods/schedule";
-import { dayMonthLabel, PERIOD_WORDS, QUINCENA_PATH } from "@/lib/pay-periods/summary";
+import { nextPayStatus, payName, PERIOD_WORDS, QUINCENA_PATH } from "@/lib/pay-periods/summary";
 
 /**
- * Acciones de la quincena: «Me pagaron», corregir o borrar ese pago y «Ya pagué».
- * Las fechas de pago las calcula la app; la base de datos abre la quincena, aparta y
- * registra los movimientos, todo de una vez.
+ * Acciones de la quincena: «Me pagaron» y corregir o borrar ese pago.
+ * Las fechas de pago las calcula la app; la base de datos abre la quincena, aparta, pasa la
+ * plata a los bolsillos y registra los movimientos, todo de una vez.
  */
 
 const SAVE_ERROR = "No pudimos guardar. Intenta de nuevo en un momento.";
 const idSchema = z.uuid();
 
-/** Lo que devuelve «Me pagaron»: además de errores, puede pedir confirmar un pago repetido. */
+/**
+ * Lo que devuelve «Me pagaron»: además de errores, puede pedir confirmar un pago repetido o, en
+ * el primer pago, preguntar si lo que les tocaba a pagos anteriores ya estaba apartado.
+ */
 export type PayFormState = FormState & {
   confirm?: { message: string; key: string; label: string };
+  prior?: { message: string };
 };
 
 function finish(path: string): never {
@@ -41,23 +45,31 @@ function finish(path: string): never {
   redirect(path);
 }
 
-/** Registrar un pago: sube la cuenta, abre la quincena nueva y aparta lo que le toca. */
+/** Registrar un pago: sube la cuenta o el efectivo, abre la quincena nueva y aparta lo que le toca. */
 export async function registerPay(
   _previous: PayFormState,
   formData: FormData,
 ): Promise<PayFormState> {
   const { user, db } = await openApp();
-  const values = readForm(formData, ["amount", "date", "confirm"]);
+  const values = readForm(formData, ["amount", "date", "pocket", "instance", "confirm", "prior"]);
 
   const parsed = paySchema.safeParse(values);
   if (!parsed.success) return { errors: firstFieldErrors(parsed.error), values };
-  const { amount, date } = parsed.data;
+  const { amount, date, pocket } = parsed.data;
   const today = todayInTimeZone(user.timeZone);
   if (compareDates(date, today) > 0) {
     return { errors: { date: "La fecha no puede ser después de hoy." }, values };
   }
 
   const last = await getCurrentPeriod(db);
+  // El siguiente pago se registra solo cuando ya está cerca (lo mismo que muestra la pantalla).
+  const status = last ? nextPayStatus(today, parseIsoDate(last.expected_end_on)!) : null;
+  if (last && status && !status.open) {
+    return {
+      message: `Todavía no: te pagan ${onDayLabel(last.expected_end_on, today)}. Podrás registrarlo desde ${onDayLabel(formatIsoDate(status.opensOn), today)}.`,
+      values,
+    };
+  }
   if (last && compareDates(date, parseIsoDate(last.started_on)!) < 0) {
     return {
       errors: {
@@ -67,18 +79,29 @@ export async function registerPay(
     };
   }
 
+  // La quincena la propone la app (la que sigue a la última, o la que se esperaba) y el
+  // usuario la puede cambiar entre las que tienen sentido para esa fecha.
+  const lastInstance = last ? instanceFromRow(last) : null;
+  const { suggested, options } = payOptions(date, lastInstance, user.payDays);
+  const instance = values.instance
+    ? options.find((option) => String(instanceKey(option)) === values.instance)
+    : suggested;
+  if (!instance) {
+    return { errors: { instance: "Elige de qué quincena es este pago." }, values };
+  }
+
   // Si la fecha queda más cerca del pago que ya se registró, puede ser un registro repetido:
   // antes de abrir otra quincena, se pregunta.
-  const match = matchPay(date, last ? instanceFromRow(last) : null, user.payDays);
-  const key = String(instanceKey(match.instance));
-  if (match.duplicateOf && last && values.confirm !== key) {
-    const proposed = dayMonthLabel(nominalPayDate(match.instance, user.payDays));
+  const key = String(instanceKey(instance));
+  const { duplicateOf } = matchPay(date, lastInstance, user.payDays);
+  if (duplicateOf && last && values.confirm !== key) {
+    const proposed = payName(instance, user.payDays);
     return {
-      values: { amount: values.amount, date: values.date },
+      values: { ...values, confirm: "" },
       confirm: {
         key,
-        message: `Ya registraste el pago del ${dayMonthLabel(nominalPayDate(match.duplicateOf, user.payDays))}, que llegó ${onDayLabel(last.started_on, today)}. ¿Este es el pago del ${proposed}, que llegó antes?`,
-        label: `Sí, es el pago del ${proposed}`,
+        message: `Ya registraste ${payName(duplicateOf, user.payDays)}, que llegó ${onDayLabel(last.started_on, today)}. ¿Este pago es ${proposed}?`,
+        label: `Sí, es ${proposed}`,
       },
     };
   }
@@ -86,26 +109,45 @@ export async function registerPay(
   const { data: periodId, error } = await db.rpc("open_pay_period", {
     p_amount: amount,
     p_received_on: formatIsoDate(date),
-    p_pay_month: payMonthIso(match.instance),
-    p_pay_slot: match.instance.slot,
-    p_expected_end_on: formatIsoDate(expectedEnd(match.instance, date, user.payDays)),
+    p_pay_month: payMonthIso(instance),
+    p_pay_slot: instance.slot,
+    p_expected_end_on: formatIsoDate(expectedEnd(instance, date, user.payDays)),
+    p_pocket_kind: pocket,
+    // En el primer pago, si no se ha respondido, la base de datos avisa (PA428) cuánto les
+    // tocaba a pagos anteriores y aquí se pregunta.
+    p_prior_covered: values.prior === "yes",
+    p_ask_prior: values.prior !== "yes" && values.prior !== "no",
   });
+  const money = (value: number) => formatMoney(value, { currency: user.currency });
+  if (error?.code === "PA428") {
+    const earlier = user.payFrequency === "monthly" ? "pagos" : "quincenas";
+    return {
+      values: { ...values, prior: "" },
+      prior: {
+        message: `De tus gastos fijos que vencen antes del próximo pago, ${money(Number(error.details))} les tocaban a ${earlier} de antes de usar la app. ¿Ya tienes esa plata apartada?`,
+      },
+    };
+  }
   if (error?.code === "PA409") return { message: "Ese pago ya está registrado.", values };
   if (error || !periodId) return { message: SAVE_ERROR, values };
 
-  const { data: rows } = await db.from("set_asides").select("amount").eq("pay_period_id", periodId);
+  // Lo que la quincena pasó sola de la cuenta a los bolsillos.
+  const { data: rows } = await db
+    .from("movements")
+    .select("amount")
+    .eq("pay_period_id", periodId)
+    .eq("origin", "set_aside");
   const count = rows?.length ?? 0;
   const total = (rows ?? []).reduce((sum, row) => sum + row.amount, 0);
-  const money = (value: number) => formatMoney(value, { currency: user.currency });
   await setFlash(
     count > 0
-      ? `${PERIOD_WORDS[user.payFrequency].opened}: apartamos ${money(total)} para ${count} ${count === 1 ? "pago" : "pagos"}`
+      ? `${PERIOD_WORDS[user.payFrequency].opened}: pasamos ${money(total)} a ${count} ${count === 1 ? "bolsillo" : "bolsillos"}`
       : `Pago de ${money(amount)} guardado`,
   );
   finish(QUINCENA_PATH);
 }
 
-/** Corregir el valor o la fecha del último pago. */
+/** Corregir el valor, la fecha o el bolsillo del último pago. */
 export async function updatePay(
   periodId: string,
   back: string,
@@ -113,7 +155,7 @@ export async function updatePay(
   formData: FormData,
 ): Promise<PayFormState> {
   const { user, db } = await openApp();
-  const values = readForm(formData, ["amount", "date"]);
+  const values = readForm(formData, ["amount", "date", "pocket"]);
 
   const parsed = paySchema.safeParse(values);
   if (!parsed.success) return { errors: firstFieldErrors(parsed.error), values };
@@ -125,6 +167,7 @@ export async function updatePay(
     p_id: idSchema.parse(periodId),
     p_amount: parsed.data.amount,
     p_received_on: formatIsoDate(parsed.data.date),
+    p_pocket_kind: parsed.data.pocket,
   });
   if (error?.code === "PA409") return { message: "Solo puedes corregir tu último pago.", values };
   if (error?.code === "23514") {
@@ -151,27 +194,4 @@ export async function deletePay(periodId: string, back: string): Promise<void> {
   }
   await setFlash(error ? "No pudimos borrar el pago." : "Pago borrado");
   finish(error ? safeReturnPath(back) : QUINCENA_PATH);
-}
-
-/** «Ya pagué»: registra el gasto desde la cuenta y marca el apartado como pagado. */
-export async function paySetAside(id: string): Promise<void> {
-  const { user, db } = await openApp();
-  const setAsideId = idSchema.parse(id);
-  const { data: row } = await db
-    .from("set_asides")
-    .select("fixed_expenses(name, amount)")
-    .eq("id", setAsideId)
-    .maybeSingle();
-
-  const { error } = await db.rpc("pay_set_aside", { p_id: setAsideId });
-  const fixed = row?.fixed_expenses;
-  await setFlash(
-    error?.code === "PA409"
-      ? "Ese pago ya estaba marcado"
-      : error || !fixed
-        ? "No pudimos marcar el pago. Intenta de nuevo."
-        : `${fixed.name} pagado: ${formatMoney(fixed.amount, { currency: user.currency })}`,
-  );
-  // Vuelve a la misma pantalla: el parámetro hace que el aviso se muestre.
-  finish(`${QUINCENA_PATH}?pagado=${setAsideId}`);
 }

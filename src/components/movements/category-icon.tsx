@@ -28,6 +28,7 @@ import {
   Smartphone,
   Sparkles,
   Utensils,
+  Wallet,
   Wrench,
   Zap,
   type LucideIcon,
@@ -77,6 +78,7 @@ const TRANSFER_ICONS: Record<string, LucideIcon> = {
   retiro: Banknote,
   consignacion: ArrowLeftRight,
   cuadre: Scale,
+  bolsillo: Wallet,
 };
 
 /** Ícono de una categoría dentro de un círculo. Si la clave no existe, usa «otros». */

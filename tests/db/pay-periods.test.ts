@@ -77,17 +77,6 @@ async function setAsides(periodId: string, user = ana) {
   return rows.map((row) => [row.fixed_expenses?.name, row.due_on, row.amount]);
 }
 
-async function setAsideId(periodId: string, name: string) {
-  const rows = ok(
-    await ana.client
-      .from("set_asides")
-      .select("id, fixed_expenses!inner(name)")
-      .eq("pay_period_id", periodId)
-      .eq("fixed_expenses.name", name),
-  );
-  return rows[0].id;
-}
-
 beforeAll(async () => {
   [ana, beto] = await Promise.all([createTestUser("Ana"), createTestUser("Beto")]);
   ok(await ana.client.rpc("set_opening_balance", { p_kind: "account", p_amount: 500_000 }));
@@ -121,7 +110,7 @@ describe("Me pagaron", () => {
       await ana.client
         .from("pay_periods")
         .select(
-          "started_on, amount_received, expected_end_on, movements(kind, origin, amount, occurred_on, categories(name))",
+          "started_on, amount_received, expected_end_on, movements!pay_periods_user_id_movement_id_fkey(kind, origin, amount, occurred_on, categories(name))",
         )
         .eq("id", id)
         .single(),
@@ -294,15 +283,100 @@ describe("gastos fijos que cambian durante la quincena", () => {
   });
 });
 
-describe("Ya pagué", () => {
-  it("registra el gasto desde la cuenta y marca el apartado como pagado", async () => {
-    await fixed("Internet", 80_000, 20, "first");
-    const sep15 = ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30"));
-    const before = await account();
+/** Saldo del bolsillo de un gasto fijo. */
+async function pocket(fixedExpenseId: string, user: TestUser = ana) {
+  const row = ok(
+    await user.client.from("pockets").select("id").eq("fixed_expense_id", fixedExpenseId).single(),
+  );
+  return Number(ok(await user.client.rpc("pocket_balance", { p_pocket: row.id })));
+}
 
-    const movementId = ok(
-      await ana.client.rpc("pay_set_aside", { p_id: await setAsideId(sep15, "Internet") }),
+/** «Pagar» desde el bolsillo. */
+function payFixed(fixedExpenseId: string, amount: number, cover = false, user: TestUser = ana) {
+  return user.client.rpc("pay_fixed_expense", {
+    p_fixed_expense: fixedExpenseId,
+    p_amount: amount,
+    p_occurred_on: "2026-11-18",
+    p_cover_from_account: cover,
+  });
+}
+
+/** Apartar (`into`) o sacar del bolsillo. */
+function move(fixedExpenseId: string, amount: number, into: boolean) {
+  return ana.client.rpc("move_fixed_pocket", {
+    p_fixed_expense: fixedExpenseId,
+    p_amount: amount,
+    p_occurred_on: "2026-09-10",
+    p_into_pocket: into,
+  });
+}
+
+describe("bolsillos de los gastos fijos", () => {
+  it("cada gasto fijo tiene su bolsillo, que sigue su nombre", async () => {
+    const id = await fixed("Internet", 80_000, 20, "first");
+    ok(await ana.client.from("fixed_expenses").update({ name: "Fibra" }).eq("id", id).select("id"));
+    const row = ok(
+      await ana.client.from("pockets").select("kind, name").eq("fixed_expense_id", id).single(),
     );
+    expect(row).toEqual({ kind: "fixed_expense", name: "Fibra" });
+    expect(await pocket(id)).toBe(0);
+  });
+
+  it("al registrar el pago, la quincena pasa a cada bolsillo lo que le toca", async () => {
+    const id = await fixed("Internet", 80_000, 20, "first");
+    const sep15 = ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30"));
+
+    expect(await pocket(id)).toBe(80_000);
+    expect(await account()).toBe(500_000 + 1_200_000 - 80_000);
+    const moved = ok(
+      await ana.client
+        .from("movements")
+        .select("kind, origin, amount, occurred_on, pay_period_id")
+        .eq("origin", "set_aside"),
+    );
+    expect(moved).toEqual([
+      {
+        kind: "transfer",
+        origin: "set_aside",
+        amount: 80_000,
+        occurred_on: "2026-09-15",
+        pay_period_id: sep15,
+      },
+    ]);
+  });
+
+  it("mitad y mitad: cada quincena pasa su mitad", async () => {
+    const id = await fixed("Celular", 50_000, 25, "half");
+    ok(await pay("2026-09", 2, "2026-09-30", "2026-10-15"));
+    expect(await pocket(id)).toBe(25_000);
+    ok(await pay("2026-10", 1, "2026-10-15", "2026-10-30"));
+    expect(await pocket(id)).toBe(50_000);
+  });
+
+  it("si el bolsillo ya tiene plata, la quincena aparta solo lo que falta", async () => {
+    const id = await fixed("Internet", 80_000, 20, "first");
+    ok(await move(id, 30_000, true));
+    ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30"));
+    expect(await pocket(id)).toBe(80_000);
+    expect(await account()).toBe(500_000 + 1_200_000 - 80_000);
+  });
+
+  it("se aparta y se saca a mano, pero no más de lo que tiene", async () => {
+    const id = await fixed("Internet", 80_000, 20, "first");
+    ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30"));
+    expect((await move(id, 90_000, false)).error?.code).toBe("PA402");
+    ok(await move(id, 30_000, false));
+    expect(await pocket(id)).toBe(50_000);
+    ok(await move(id, 10_000, true));
+    expect(await pocket(id)).toBe(60_000);
+    expect(await account()).toBe(500_000 + 1_200_000 - 60_000);
+  });
+
+  it("pagar registra «Pago …» desde el bolsillo y marca el vencimiento como pagado", async () => {
+    const id = await fixed("Internet", 80_000, 20, "first");
+    const sep15 = ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30"));
+    const movementId = ok(await payFixed(id, 80_000));
+
     const movement = ok(
       await ana.client
         .from("movements")
@@ -316,12 +390,11 @@ describe("Ya pagué", () => {
       kind: "expense",
       origin: "manual",
       amount: 80_000,
-      description: "Internet",
+      description: "Pago Internet",
       category_id: categories.get(`${ana.id}:Servicios`),
-      pockets: { kind: "account" },
+      pockets: { kind: "fixed_expense" },
     });
-    expect(await account()).toBe(before - 80_000);
-
+    expect(await pocket(id)).toBe(0);
     const row = ok(
       await ana.client
         .from("set_asides")
@@ -332,36 +405,47 @@ describe("Ya pagué", () => {
     expect(row.paid_movement_id).toBe(movementId);
   });
 
-  it("no se paga dos veces", async () => {
-    await fixed("Internet", 80_000, 20, "first");
-    const sep15 = ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30"));
-    const id = await setAsideId(sep15, "Internet");
-    ok(await ana.client.rpc("pay_set_aside", { p_id: id }));
-    expect((await ana.client.rpc("pay_set_aside", { p_id: id })).error?.code).toBe("PA409");
+  it("si el bolsillo no alcanza, avisa; con permiso, lo que falta sale de la cuenta", async () => {
+    const id = await fixed("Internet", 80_000, 20, "first");
+    ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30"));
+    const before = await account();
+
+    const { error } = await payFixed(id, 100_000);
+    expect(error?.code).toBe("PA402");
+    expect(error?.details).toBe("20000");
+    expect(await pocket(id)).toBe(80_000);
+
+    ok(await payFixed(id, 100_000, true));
+    expect(await pocket(id)).toBe(0);
+    expect(await account()).toBe(before - 20_000);
+  });
+
+  it("lo que sobra se queda en el bolsillo y el mes siguiente aparta menos", async () => {
+    const id = await fixed("Internet", 80_000, 20, "first");
+    ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30"));
+    ok(await payFixed(id, 70_000));
+    expect(await pocket(id)).toBe(10_000);
+
+    ok(await pay("2026-09", 2, "2026-09-30", "2026-10-15"));
+    ok(await pay("2026-10", 1, "2026-10-15", "2026-10-30"));
+    expect(await pocket(id)).toBe(80_000);
   });
 
   it("pagar antes de tiempo un gasto mitad y mitad no lo vuelve a apartar después", async () => {
-    await fixed("Celular", 50_000, 25, "half");
-    const sep30 = ok(await pay("2026-09", 2, "2026-09-30", "2026-10-15"));
-    const early = sep30;
-    const rowId = await setAsideId(early, "Celular");
-    ok(await ana.client.rpc("pay_set_aside", { p_id: rowId }));
+    const id = await fixed("Celular", 50_000, 25, "half");
+    ok(await pay("2026-09", 2, "2026-09-30", "2026-10-15"));
+    ok(await payFixed(id, 50_000, true));
 
-    // La quincena que pagó completa lo que faltaba apartar, y la siguiente ya no lo aparta.
-    expect((await setAsides(early)).filter((row) => row[1] === "2026-10-25")).toEqual([
-      ["Celular", "2026-10-25", 50_000],
-    ]);
     const oct15 = ok(await pay("2026-10", 1, "2026-10-15", "2026-10-30"));
     expect(await setAsides(oct15)).toEqual([]);
+    expect(await pocket(id)).toBe(0);
   });
 
   it("al pagar, todas las partes de ese vencimiento quedan pagadas", async () => {
-    await fixed("Celular", 50_000, 25, "half");
+    const id = await fixed("Celular", 50_000, 25, "half");
     const sep30 = ok(await pay("2026-09", 2, "2026-09-30", "2026-10-15"));
     const oct15 = ok(await pay("2026-10", 1, "2026-10-15", "2026-10-30"));
-    const movementId = ok(
-      await ana.client.rpc("pay_set_aside", { p_id: await setAsideId(oct15, "Celular") }),
-    );
+    const movementId = ok(await payFixed(id, 50_000));
 
     const rows = ok(
       await ana.client
@@ -376,14 +460,13 @@ describe("Ya pagué", () => {
     ]);
   });
 
-  it("si se borra el gasto que registró, el apartado vuelve a pendiente", async () => {
-    await fixed("Internet", 80_000, 20, "first");
+  it("si se borra el pago, el vencimiento vuelve a pendiente y la plata al bolsillo", async () => {
+    const id = await fixed("Internet", 80_000, 20, "first");
     const sep15 = ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30"));
-    const movementId = ok(
-      await ana.client.rpc("pay_set_aside", { p_id: await setAsideId(sep15, "Internet") }),
-    );
+    const movementId = ok(await payFixed(id, 80_000));
     ok(await ana.client.from("movements").delete().eq("id", movementId).select("id"));
 
+    expect(await pocket(id)).toBe(80_000);
     const row = ok(
       await ana.client
         .from("set_asides")
@@ -392,6 +475,68 @@ describe("Ya pagué", () => {
         .single(),
     );
     expect(row.paid_movement_id).toBeNull();
+  });
+
+  it("al borrar el gasto fijo, su plata vuelve a la cuenta y el bolsillo se archiva", async () => {
+    const id = await fixed("Internet", 80_000, 20, "first");
+    ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30"));
+    const before = await account();
+    const { data: row } = await ana.client
+      .from("pockets")
+      .select("id")
+      .eq("fixed_expense_id", id)
+      .single();
+
+    ok(await ana.client.from("fixed_expenses").delete().eq("id", id).select("id"));
+    expect(await account()).toBe(before + 80_000);
+    const archived = ok(
+      await ana.client
+        .from("pockets")
+        .select("archived_at, fixed_expense_id")
+        .eq("id", row!.id)
+        .single(),
+    );
+    expect(archived.fixed_expense_id).toBeNull();
+    expect(archived.archived_at).not.toBeNull();
+  });
+
+  it("primer pago: si lo de antes ya estaba apartado, entra como saldo inicial del bolsillo", async () => {
+    const id = await fixed("Gasolina", 120_000, 30, "half");
+    const first = (extra: Record<string, boolean>) =>
+      ana.client.rpc("open_pay_period", {
+        p_amount: 1_100_000,
+        p_received_on: "2026-11-18",
+        p_pay_month: "2026-11-01",
+        p_pay_slot: 2,
+        p_expected_end_on: "2026-12-15",
+        ...extra,
+      });
+
+    const asked = await first({ p_ask_prior: true });
+    expect(asked.error?.code).toBe("PA428");
+    expect(asked.error?.details).toBe("60000");
+    expect(await pocket(id)).toBe(0);
+
+    ok(await first({ p_prior_covered: true }));
+    expect(await pocket(id)).toBe(120_000);
+    // Del pago solo salió su mitad; la otra ya la tenía.
+    expect(await account()).toBe(500_000 + 1_100_000 - 60_000);
+  });
+
+  it("primer pago: si no estaba apartado, el pago aparta todo", async () => {
+    const id = await fixed("Gasolina", 120_000, 30, "half");
+    ok(
+      await ana.client.rpc("open_pay_period", {
+        p_amount: 1_100_000,
+        p_received_on: "2026-11-18",
+        p_pay_month: "2026-11-01",
+        p_pay_slot: 2,
+        p_expected_end_on: "2026-12-15",
+        p_prior_covered: false,
+      }),
+    );
+    expect(await pocket(id)).toBe(120_000);
+    expect(await account()).toBe(500_000 + 1_100_000 - 120_000);
   });
 });
 
@@ -410,7 +555,9 @@ describe("corregir o borrar un pago", () => {
     const period = ok(
       await ana.client
         .from("pay_periods")
-        .select("started_on, amount_received, movements(amount, occurred_on)")
+        .select(
+          "started_on, amount_received, movements!pay_periods_user_id_movement_id_fkey(amount, occurred_on)",
+        )
         .eq("id", id)
         .single(),
     );
@@ -433,42 +580,53 @@ describe("corregir o borrar un pago", () => {
     expect((await ana.client.rpc("delete_pay_period", { p_id: first })).error?.code).toBe("PA409");
   });
 
-  it("borrar el pago quita el ingreso, la quincena y sus apartados", async () => {
-    await fixed("Internet", 80_000, 20, "first");
+  it("borrar el pago quita el ingreso, la quincena, sus apartados y lo que pasó a los bolsillos", async () => {
+    const internet = await fixed("Internet", 80_000, 20, "first");
     const id = ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30"));
     ok(await ana.client.rpc("delete_pay_period", { p_id: id }));
 
     expect(await account()).toBe(500_000);
+    expect(await pocket(internet)).toBe(0);
     expect(ok(await ana.client.from("pay_periods").select("id"))).toEqual([]);
     expect(ok(await ana.client.from("set_asides").select("id"))).toEqual([]);
   });
 
   it("no se borra un pago con el que ya se pagó algo", async () => {
-    await fixed("Internet", 80_000, 20, "first");
+    const internet = await fixed("Internet", 80_000, 20, "first");
     const id = ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30"));
-    ok(await ana.client.rpc("pay_set_aside", { p_id: await setAsideId(id, "Internet") }));
+    ok(await payFixed(internet, 80_000));
     expect((await ana.client.rpc("delete_pay_period", { p_id: id })).error?.code).toBe("PA423");
   });
 });
 
 describe("cada usuario, lo suyo", () => {
   it("nadie ve ni paga las quincenas de otro", async () => {
-    await fixed("Internet", 80_000, 20, "first");
+    const internet = await fixed("Internet", 80_000, 20, "first");
     const id = ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30"));
-    const setAside = await setAsideId(id, "Internet");
 
     expect(ok(await beto.client.from("pay_periods").select("id"))).toEqual([]);
     expect(ok(await beto.client.from("set_asides").select("id"))).toEqual([]);
-    expect((await beto.client.rpc("pay_set_aside", { p_id: setAside })).error?.code).toBe("P0002");
+    expect((await payFixed(internet, 80_000, true, beto)).error?.code).toBe("P0002");
+    expect(
+      (
+        await beto.client.rpc("move_fixed_pocket", {
+          p_fixed_expense: internet,
+          p_amount: 1_000,
+          p_occurred_on: "2026-09-10",
+          p_into_pocket: true,
+        })
+      ).error?.code,
+    ).toBe("P0002");
+    expect(await pocket(internet)).toBe(80_000);
     expect((await beto.client.rpc("delete_pay_period", { p_id: id })).error?.code).toBe("PA409");
   });
 
-  it("al borrar una cuenta se van sus quincenas, apartados y pagos", async () => {
+  it("al borrar una cuenta se van sus quincenas, apartados, bolsillos y pagos", async () => {
     const carla = await createTestUser("Carla");
     const services = ok(
       await carla.client.from("categories").select("id").eq("name", "Servicios").single(),
     );
-    ok(
+    const internet = ok(
       await carla.client
         .from("fixed_expenses")
         .insert({
@@ -481,15 +639,12 @@ describe("cada usuario, lo suyo", () => {
         })
         .select("id"),
     );
-    const id = ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30", { user: carla }));
-    const setAside = ok(
-      await carla.client.from("set_asides").select("id").eq("pay_period_id", id).single(),
-    );
-    ok(await carla.client.rpc("pay_set_aside", { p_id: setAside.id }));
+    ok(await pay("2026-09", 1, "2026-09-15", "2026-09-30", { user: carla }));
+    ok(await payFixed(internet[0].id, 80_000, false, carla));
 
     const { error } = await admin.auth.admin.deleteUser(carla.id);
     expect(error).toBeNull();
-    for (const table of ["pay_periods", "set_asides", "movements"] as const) {
+    for (const table of ["pay_periods", "set_asides", "movements", "pockets"] as const) {
       expect(ok(await admin.from(table).select("id").eq("user_id", carla.id))).toEqual([]);
     }
   });

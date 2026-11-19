@@ -16,7 +16,14 @@ describe("totales de la quincena", () => {
         { amount: 80_000, paid_movement_id: null },
         { amount: 200_000, paid_movement_id: null },
       ]),
-    ).toEqual({ setAside: 630_000, paid: 350_000, pending: 280_000, count: 3, paidCount: 1 });
+    ).toEqual({
+      setAside: 630_000,
+      paid: 350_000,
+      pending: 280_000,
+      prior: 0,
+      count: 3,
+      paidCount: 1,
+    });
   });
 
   it("sin apartados, todo en cero", () => {
@@ -24,6 +31,7 @@ describe("totales de la quincena", () => {
       setAside: 0,
       paid: 0,
       pending: 0,
+      prior: 0,
       count: 0,
       paidCount: 0,
     });
@@ -37,14 +45,18 @@ describe("próximo pago", () => {
     expect(nextPayStatus(today, { year: 2026, month: 11, day: 30 })).toEqual({
       days: 12,
       due: false,
+      open: false,
+      opensOn: { year: 2026, month: 11, day: 27 },
     });
+    expect(nextPayStatus(today, { year: 2026, month: 11, day: 21 }).open).toBe(true);
   });
 
   it("el día del pago, o si ya pasó, se pregunta si ya llegó", () => {
     expect(nextPayStatus(today, today).due).toBe(true);
-    expect(nextPayStatus(today, { year: 2026, month: 11, day: 13 })).toEqual({
+    expect(nextPayStatus(today, { year: 2026, month: 11, day: 13 })).toMatchObject({
       days: -5,
       due: true,
+      open: true,
     });
   });
 

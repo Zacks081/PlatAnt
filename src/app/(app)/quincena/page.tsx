@@ -1,30 +1,27 @@
-import { Check, ChevronRight } from "lucide-react";
+import { Check } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 
 import { CategoryIcon } from "@/components/movements/category-icon";
 import { BackLink, Screen, ScreenFallback } from "@/components/onboarding/screen";
-import { buttonVariants } from "@/components/ui/button";
-import { compareDates, formatIsoDate, parseIsoDate } from "@/lib/dates";
+import { compareDates, formatIsoDate, parseIsoDate, type CalendarDate } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
-import { dayLabel, onDayLabel } from "@/lib/movements/format";
 import { openApp } from "@/lib/movements/data";
+import { dayLabel, onDayLabel } from "@/lib/movements/format";
 import { stepPath } from "@/lib/onboarding/steps";
-import { getPayOverview, type SetAsideRow } from "@/lib/pay-periods/data";
+import { getPayOverview, type FixedExpenseItem } from "@/lib/pay-periods/data";
 import { inDaysLabel, PERIOD_WORDS, QUINCENA_PATH } from "@/lib/pay-periods/summary";
+import { fixedPocketPath, pocketProgress } from "@/lib/pockets/fixed";
 import { cn } from "@/lib/utils";
-
-import { paySetAside } from "./actions";
 
 export const metadata: Metadata = { title: "Quincena" };
 
 const focusRing = "outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
-const PAYDAY_PATH = `/me-pagaron?volver=${encodeURIComponent(QUINCENA_PATH)}`;
 
 /**
- * La quincena en curso: cuánto llegó, cuándo llega el próximo pago y qué está apartado,
- * qué ya se pagó y qué falta.
+ * La quincena en curso: cuánto llegó, cuándo llega el próximo pago y, por cada gasto fijo,
+ * cuánto tiene su bolsillo, qué ya se pagó y qué falta.
  */
 export default function PayPeriodPage() {
   return (
@@ -36,7 +33,7 @@ export default function PayPeriodPage() {
 
 async function PayPeriod() {
   const { user, db } = await openApp();
-  const { today, period, setAsides, totals, next } = await getPayOverview(db, user);
+  const { today, period, items, pocketTotals, next } = await getPayOverview(db, user);
   const money = (amount: number) => formatMoney(amount, { currency: user.currency });
   const words = PERIOD_WORDS[user.payFrequency];
   const nextOn = onDayLabel(formatIsoDate(next.date), today);
@@ -65,21 +62,20 @@ async function PayPeriod() {
             {money(period.amount_received)}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {next.due ? (
-              <>
-                <span className="font-semibold text-libre">¿Ya te pagaron?</span> El próximo pago se
-                esperaba {nextOn}.
-              </>
-            ) : (
-              `Te pagan otra vez ${nextOn}, ${inDaysLabel(next.days)}.`
-            )}
+            {next.due
+              ? `El próximo pago se esperaba ${nextOn}. Cuando llegue, regístralo en Inicio.`
+              : `Te pagan otra vez ${nextOn}, ${inDaysLabel(next.days)}.`}
           </p>
-          <dl className="mt-3.5 grid grid-cols-3 gap-3 border-t border-border pt-3.5">
+          {/* Las tres cifras son solo de los gastos fijos, no de toda la plata de la quincena. */}
+          <h2 className="mt-3.5 border-t border-border pt-3.5 text-sm font-semibold">
+            Gastos fijos
+          </h2>
+          <dl className="mt-2 grid grid-cols-3 gap-3">
             {(
               [
-                ["Apartado", totals.setAside, "bg-apartado"],
-                ["Pagado", totals.paid, "bg-muted-foreground"],
-                ["Falta", totals.pending, "bg-foreground"],
+                ["En bolsillos", pocketTotals.inPockets, "bg-apartado"],
+                ["Pagado", pocketTotals.paid, "bg-libre"],
+                ["Falta", pocketTotals.missing, "bg-foreground"],
               ] as const
             ).map(([label, amount, dot]) => (
               <div key={label} className="flex min-w-0 flex-col gap-0.5">
@@ -99,19 +95,19 @@ async function PayPeriod() {
           <p className="font-display text-xl font-semibold">Todavía no has registrado un pago</p>
           <p className="text-muted-foreground">
             Esperamos tu próximo pago {nextOn}
-            {next.days > 0 ? `, ${inDaysLabel(next.days)}` : ""}. Cuando te paguen, regístralo:
-            desde ahí la app aparta lo de tus gastos fijos.
+            {next.days > 0 ? `, ${inDaysLabel(next.days)}` : ""}. Cuando te paguen, regístralo en
+            Inicio: desde ahí la app aparta lo de tus gastos fijos.
           </p>
         </section>
       )}
 
       {period && (
         <section className="flex flex-col gap-2.5">
-          <h2 className="px-1 font-display text-lg font-semibold">Apartados</h2>
-          {setAsides.length > 0 ? (
+          <h2 className="px-1 font-display text-lg font-semibold">Bolsillos</h2>
+          {items.length > 0 ? (
             <ul className="flex flex-col divide-y divide-border rounded-[24px] bg-card px-4">
-              {setAsides.map((row) => (
-                <SetAsideItem key={row.id} row={row} today={today} money={money} />
+              {items.map((item) => (
+                <PocketItem key={item.fixedExpenseId} item={item} today={today} money={money} />
               ))}
             </ul>
           ) : (
@@ -124,104 +120,85 @@ async function PayPeriod() {
               .
             </p>
           )}
-          <p className="px-1 text-[13px] text-muted-foreground">
-            Lo apartado sigue en tu cuenta, pero no está libre para gastar.
-          </p>
         </section>
       )}
-
-      <div className="mt-auto pt-2">
-        <Link
-          href={PAYDAY_PATH}
-          // Con cn, el borde del botón de contorno le gana al borde transparente de la base.
-          className={cn(
-            buttonVariants({ variant: !period || next.due ? "default" : "outline", size: "lg" }),
-            "w-full",
-          )}
-        >
-          Me pagaron
-        </Link>
-      </div>
     </Screen>
   );
 }
 
-function SetAsideItem({
-  row,
+/** Un gasto fijo de la quincena: su bolsillo, cuánto tiene y cuánto falta, o cuándo se pagó. */
+function PocketItem({
+  item,
   today,
   money,
 }: {
-  row: SetAsideRow;
-  today: { year: number; month: number; day: number };
+  item: FixedExpenseItem;
+  today: CalendarDate;
   money: (amount: number) => string;
 }) {
-  const fixed = row.fixed_expenses;
-  const name = fixed?.name ?? "Gasto fijo";
-  const isPaid = row.paid_movement_id !== null;
-  const due = parseIsoDate(row.due_on)!;
-  const overdue = !isPaid && compareDates(due, today) < 0;
-  const when = dayLabel(row.due_on, today);
-  // Con «mitad y mitad», esta quincena aparta solo una parte.
-  const part = fixed && row.amount < fixed.amount ? ` · parte de ${money(fixed.amount)}` : "";
-
-  const details = (
-    <>
-      <CategoryIcon icon={fixed?.categories?.icon} />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate font-semibold">{name}</span>
-        <span className={cn("text-[13px] text-muted-foreground", overdue && "text-gasto")}>
-          {overdue
-            ? `Venció ${onDayLabel(row.due_on, today)}`
-            : `Vence ${when.charAt(0).toLowerCase()}${when.slice(1)}`}
-          {part}
-        </span>
-      </span>
-    </>
-  );
-  const amount = (
-    <span className="font-display text-base font-semibold tabular-nums">{money(row.amount)}</span>
-  );
-
-  if (isPaid) {
-    // Lo pagado abre el gasto que se registró: ahí se corrige o se borra (y vuelve a pendiente).
-    return (
-      <li>
-        <Link
-          href={`/movimiento/${row.paid_movement_id}?volver=${encodeURIComponent(QUINCENA_PATH)}`}
-          className={cn("flex min-h-16 items-center gap-3 rounded-lg py-2.5", focusRing)}
-        >
-          {details}
-          <span className="flex shrink-0 flex-col items-end gap-0.5">
-            {amount}
-            <span className="flex items-center gap-1 text-[13px] text-muted-foreground">
-              <Check aria-hidden="true" className="size-3.5" />
-              Pagado
-              <ChevronRight aria-hidden="true" className="size-3.5" />
-            </span>
-          </span>
-        </Link>
-      </li>
-    );
-  }
+  const isPaid = item.paidAmount !== null;
+  const overdue = !isPaid && compareDates(parseIsoDate(item.dueOn)!, today) < 0;
+  const when = dayLabel(item.dueOn, today);
+  const progress = pocketProgress(item.balance, item.total);
 
   return (
-    <li className="flex min-h-16 items-center gap-3 py-2.5">
-      {details}
-      <span className="flex shrink-0 flex-col items-end gap-1">
-        {amount}
-        <form action={paySetAside.bind(null, row.id)}>
-          <button
-            type="submit"
+    <li className="flex flex-col gap-2.5 py-3.5">
+      <div className="flex items-center gap-3">
+        <CategoryIcon icon={item.icon} />
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="truncate font-semibold">{item.name}</span>
+          <span className={cn("text-[13px] text-muted-foreground", overdue && "text-gasto")}>
+            {overdue
+              ? `Venció ${onDayLabel(item.dueOn, today)}`
+              : `Vence ${when.charAt(0).toLowerCase()}${when.slice(1)}`}
+          </span>
+        </span>
+        {item.hasPocket && (
+          <Link
+            href={fixedPocketPath(item.fixedExpenseId)}
             className={cn(
-              "flex h-11 items-center gap-1.5 rounded-full bg-secondary px-4 text-sm font-semibold",
+              // Negro sobre la tarjeta, con borde claro: se ve que es un botón sin el verde.
+              "flex h-11 shrink-0 items-center rounded-full border border-foreground/25 bg-background px-4 text-sm font-semibold text-foreground active:bg-secondary",
               focusRing,
             )}
           >
-            <Check aria-hidden="true" className="size-4" />
-            Ya pagué
-          </button>
-        </form>
-      </span>
+            Ver bolsillo
+          </Link>
+        )}
+      </div>
+      {isPaid ? (
+        <p className="flex items-center gap-1.5 text-[13px] font-semibold text-libre">
+          <Check aria-hidden="true" className="size-3.5" />
+          Pagado {item.paidOn ? onDayLabel(item.paidOn, today) : ""} · {money(item.paidAmount!)}
+        </p>
+      ) : (
+        <>
+          <div
+            role="img"
+            aria-label={`${money(item.balance)} de ${money(item.total)} en el bolsillo`}
+            className="flex h-2 overflow-hidden rounded-full bg-border"
+          >
+            <span
+              className="rounded-full bg-apartado"
+              style={{ width: `${Math.round(progress.filled * 100)}%` }}
+            />
+          </div>
+          <p className="flex items-center justify-between gap-3 text-[13px]">
+            {/* Lo que tiene el bolsillo frente al valor del gasto. */}
+            <span className="min-w-0 truncate text-muted-foreground tabular-nums">
+              <span className="font-semibold text-foreground">{money(item.balance)}</span> de{" "}
+              {money(item.total)}
+            </span>
+            {progress.ready ? (
+              <span className="shrink-0 font-semibold text-libre">Listo para pagar</span>
+            ) : (
+              <span className="shrink-0 font-semibold text-apartado tabular-nums">
+                Falta {money(progress.missing)}
+              </span>
+            )}
+          </p>
+        </>
+      )}
     </li>
   );
 }

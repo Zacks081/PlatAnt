@@ -51,6 +51,9 @@ export function onDayLabel(isoDate: string, today: CalendarDate): string {
   return `el ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
 }
 
+/** Cómo se llama en el historial el ingreso que registra «Me pagaron». */
+export const PAYDAY_LABEL = "Pago de quincena";
+
 export const POCKET_LABELS: Record<string, string> = {
   account: "Cuenta",
   cash: "Efectivo",

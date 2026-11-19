@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { z } from "zod";
@@ -7,14 +8,19 @@ import { ConfirmDelete } from "@/components/movements/confirm-delete";
 import { MovementForm, TransferForm } from "@/components/movements/movement-form";
 import { ItemHeader, Screen, ScreenFallback } from "@/components/onboarding/screen";
 import { PaydayForm } from "@/components/pay-periods/payday-form";
+import { buttonVariants } from "@/components/ui/button";
 import { formatMoney } from "@/lib/money";
-import { getMovement, getTransferFee, openApp } from "@/lib/movements/data";
-import { dayLabel, POCKET_LABELS } from "@/lib/movements/format";
+import { getMovement, getTransferFee, openApp, type MovementRow } from "@/lib/movements/data";
+import { dayLabel, PAYDAY_LABEL, POCKET_LABELS } from "@/lib/movements/format";
 import { movementFormData } from "@/lib/movements/form-data";
 import { safeReturnPath } from "@/lib/movements/validation";
 import { getRecentPeriods } from "@/lib/pay-periods/data";
+import { instanceFromRow } from "@/lib/pay-periods/schedule";
+import { payOptionLabel } from "@/lib/pay-periods/summary";
+import { fixedPocketPath } from "@/lib/pockets/fixed";
 import { reconciliationLabel } from "@/lib/pockets/pockets";
-import { addDays, todayInTimeZone } from "@/lib/dates";
+import { cn } from "@/lib/utils";
+import { addDays, todayInTimeZone, type CalendarDate } from "@/lib/dates";
 
 import { deletePay, updatePay } from "../../(app)/quincena/actions";
 import { deleteMovement, saveMovement, saveTransfer } from "../../movimientos/actions";
@@ -39,6 +45,22 @@ async function Movement({ params, searchParams }: Props) {
   const { user, db } = await openApp();
   const movement = await getMovement(db, id);
   if (!movement) notFound();
+
+  // Lo que entra, sale o se paga desde el bolsillo de un gasto fijo se maneja desde el bolsillo.
+  const fixedPocket = [movement.pockets, movement.to_pocket].find(
+    (pocket) => pocket?.kind === "fixed_expense",
+  );
+  if (fixedPocket) {
+    return (
+      <PocketMovementDetail
+        movement={movement}
+        pocket={fixedPocket}
+        back={back}
+        today={todayInTimeZone(user.timeZone)}
+        currency={user.currency}
+      />
+    );
+  }
 
   if (movement.kind === "transfer") {
     const direction = movement.pockets?.kind === "account" ? "withdrawal" : "deposit";
@@ -79,22 +101,23 @@ async function Movement({ params, searchParams }: Props) {
     );
   }
 
-  // Un pago de «Me pagaron»: se corrige con su propio formulario, porque abrió una quincena.
+  // Un pago de quincena: se corrige con su propio formulario, porque abrió una quincena.
   // Solo el último: los anteriores ya son historia.
   if (movement.origin === "payday") {
     const [latest] = await getRecentPeriods(db, 1);
     const today = todayInTimeZone(user.timeZone);
+    const pocket = movement.pockets?.kind === "cash" ? "cash" : "account";
     if (latest?.movement_id === movement.id) {
       return (
         <Screen>
           <ItemHeader
             backHref={back}
-            title="Me pagaron"
+            title={PAYDAY_LABEL}
             action={
               <ConfirmDelete
                 action={deletePay.bind(null, latest.id, back)}
                 title="¿Borrar este pago?"
-                description="Se quita el ingreso de tu cuenta y se cierra la quincena que abrió, con sus apartados. No se puede deshacer."
+                description="Se quita el ingreso y se cierra la quincena que abrió, con sus apartados. No se puede deshacer."
               />
             }
           />
@@ -102,20 +125,24 @@ async function Movement({ params, searchParams }: Props) {
             action={updatePay.bind(null, latest.id, back)}
             today={today}
             minDate={addDays(today, -62)}
-            initial={{ amount: movement.amount, date: movement.occurred_on }}
+            initial={{ amount: movement.amount, date: movement.occurred_on, pocket }}
             note="Si cambias el valor o la fecha, los apartados de la quincena se ajustan solos."
             autoFocus={false}
+            pay={{
+              label: user.payDays.length > 1 ? "Quincena" : "Mes",
+              fixed: payOptionLabel(instanceFromRow(latest), user.payDays),
+            }}
           />
         </Screen>
       );
     }
     return (
       <Screen>
-        <ItemHeader backHref={back} title="Me pagaron" />
+        <ItemHeader backHref={back} title={PAYDAY_LABEL} />
         <dl className="flex flex-col divide-y divide-border rounded-[24px] bg-card px-5">
           {[
             ["Valor", formatMoney(movement.amount, { currency: user.currency })],
-            ["Bolsillo", "Cuenta"],
+            ["Bolsillo", POCKET_LABELS[pocket]],
             ["Fecha", dayLabel(movement.occurred_on, today)],
           ].map(([term, detail]) => (
             <div key={term} className="flex min-h-14 items-center justify-between gap-3">
@@ -207,6 +234,92 @@ async function Movement({ params, searchParams }: Props) {
         }}
         autoFocus={false}
       />
+    </Screen>
+  );
+}
+
+/**
+ * Un movimiento de un bolsillo de gasto fijo: lo que apartó la quincena, lo que se apartó o
+ * sacó a mano, o el pago del gasto. Se ve aquí y se maneja desde el bolsillo; lo hecho a mano
+ * se puede borrar (un pago borrado vuelve a quedar pendiente).
+ */
+function PocketMovementDetail({
+  movement,
+  pocket,
+  back,
+  today,
+  currency,
+}: {
+  movement: MovementRow;
+  pocket: { name: string; fixed_expense_id: string | null };
+  back: string;
+  today: CalendarDate;
+  currency: string;
+}) {
+  const isPayment = movement.kind === "expense";
+  const isAutomatic = movement.origin === "set_aside";
+  const label = (kind: string | undefined, name: string | undefined) =>
+    kind === "fixed_expense" ? `Bolsillo ${name ?? ""}` : (POCKET_LABELS[kind ?? ""] ?? "");
+  const title = isPayment
+    ? (movement.description ?? `Pago ${pocket.name}`)
+    : movement.to_pocket?.kind === "fixed_expense"
+      ? `Apartado ${pocket.name}`
+      : `Sacado de ${pocket.name}`;
+  const rows = [
+    ["Valor", formatMoney(movement.amount, { currency })],
+    ...(isPayment
+      ? [
+          ["Categoría", movement.categories?.name ?? "Sin categoría"],
+          ["Sale de", label(movement.pockets?.kind, movement.pockets?.name)],
+        ]
+      : [
+          ["Sale de", label(movement.pockets?.kind, movement.pockets?.name)],
+          ["Entra a", label(movement.to_pocket?.kind, movement.to_pocket?.name)],
+        ]),
+    ["Fecha", dayLabel(movement.occurred_on, today)],
+  ];
+
+  return (
+    <Screen>
+      <ItemHeader
+        backHref={back}
+        title={title}
+        action={
+          isAutomatic ? undefined : (
+            <ConfirmDelete
+              action={deleteMovement.bind(null, movement.id, back)}
+              title={isPayment ? "¿Borrar este pago?" : "¿Borrar este movimiento?"}
+              description={
+                isPayment
+                  ? "La plata vuelve al bolsillo y el pago queda pendiente. No se puede deshacer."
+                  : "La plata vuelve a como estaba antes. No se puede deshacer."
+              }
+            />
+          )
+        }
+      />
+      <dl className="flex flex-col divide-y divide-border rounded-[24px] bg-card px-5">
+        {rows.map(([term, detail]) => (
+          <div key={term} className="flex min-h-14 items-center justify-between gap-3">
+            <dt className="text-muted-foreground">{term}</dt>
+            <dd className="min-w-0 truncate font-semibold tabular-nums">{detail}</dd>
+          </div>
+        ))}
+      </dl>
+      {isAutomatic && (
+        <p className="px-1 text-[13px] text-muted-foreground">
+          Lo apartó la quincena al registrar el pago. Para devolverlo a la cuenta, usa «Sacar» en el
+          bolsillo.
+        </p>
+      )}
+      {pocket.fixed_expense_id && (
+        <Link
+          href={fixedPocketPath(pocket.fixed_expense_id)}
+          className={cn(buttonVariants({ variant: "outline", size: "lg" }), "w-full")}
+        >
+          Ver bolsillo
+        </Link>
+      )}
     </Screen>
   );
 }

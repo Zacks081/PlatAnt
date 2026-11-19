@@ -169,14 +169,14 @@ isOneToOne: false
                   ]
                 },"movements": {
                   Row: {
-                    "amount": number,"category_id": string | null,"created_at": string,"description": string | null,"id": string,"kind": Database["public"]['Enums']["movement_kind"],"occurred_on": string,"origin": Database["public"]['Enums']["movement_origin"],"parent_id": string | null,"pocket_id": string,"to_pocket_id": string | null,"user_id": string
+                    "amount": number,"category_id": string | null,"created_at": string,"description": string | null,"id": string,"kind": Database["public"]['Enums']["movement_kind"],"occurred_on": string,"origin": Database["public"]['Enums']["movement_origin"],"parent_id": string | null,"pay_period_id": string | null,"pocket_id": string,"to_pocket_id": string | null,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount": number,"category_id"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"kind": Database["public"]['Enums']["movement_kind"],"occurred_on": string,"origin"?: Database["public"]['Enums']["movement_origin"],"parent_id"?: string | null,"pocket_id": string,"to_pocket_id"?: string | null,"user_id"?: string
+                    "amount": number,"category_id"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"kind": Database["public"]['Enums']["movement_kind"],"occurred_on": string,"origin"?: Database["public"]['Enums']["movement_origin"],"parent_id"?: string | null,"pay_period_id"?: string | null,"pocket_id": string,"to_pocket_id"?: string | null,"user_id"?: string
                   }
                   Update: {
-                    "amount"?: number,"category_id"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"kind"?: Database["public"]['Enums']["movement_kind"],"occurred_on"?: string,"origin"?: Database["public"]['Enums']["movement_origin"],"parent_id"?: string | null,"pocket_id"?: string,"to_pocket_id"?: string | null,"user_id"?: string
+                    "amount"?: number,"category_id"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"kind"?: Database["public"]['Enums']["movement_kind"],"occurred_on"?: string,"origin"?: Database["public"]['Enums']["movement_origin"],"parent_id"?: string | null,"pay_period_id"?: string | null,"pocket_id"?: string,"to_pocket_id"?: string | null,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -184,6 +184,12 @@ isOneToOne: false
       columns: ["user_id","parent_id"]
 isOneToOne: false
       referencedRelation: "movements"
+      referencedColumns: ["user_id","id"]
+    },{
+      foreignKeyName: "movements_pay_period_fkey"
+      columns: ["user_id","pay_period_id"]
+isOneToOne: false
+      referencedRelation: "pay_periods"
       referencedColumns: ["user_id","id"]
     },{
       foreignKeyName: "movements_user_id_category_id_fkey"
@@ -213,14 +219,14 @@ isOneToOne: false
                   ]
                 },"pay_periods": {
                   Row: {
-                    "amount_received": number,"closed_at": string | null,"created_at": string,"expected_end_on": string,"id": string,"movement_id": string,"pay_month": string,"pay_slot": number,"started_on": string,"updated_at": string,"user_id": string
+                    "amount_received": number,"closed_at": string | null,"created_at": string,"expected_end_on": string,"id": string,"movement_id": string,"pay_month": string,"pay_slot": number,"prior_covered": boolean,"started_on": string,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount_received": number,"closed_at"?: string | null,"created_at"?: string,"expected_end_on": string,"id"?: string,"movement_id": string,"pay_month": string,"pay_slot": number,"started_on": string,"updated_at"?: string,"user_id"?: string
+                    "amount_received": number,"closed_at"?: string | null,"created_at"?: string,"expected_end_on": string,"id"?: string,"movement_id": string,"pay_month": string,"pay_slot": number,"prior_covered"?: boolean,"started_on": string,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "amount_received"?: number,"closed_at"?: string | null,"created_at"?: string,"expected_end_on"?: string,"id"?: string,"movement_id"?: string,"pay_month"?: string,"pay_slot"?: number,"started_on"?: string,"updated_at"?: string,"user_id"?: string
+                    "amount_received"?: number,"closed_at"?: string | null,"created_at"?: string,"expected_end_on"?: string,"id"?: string,"movement_id"?: string,"pay_month"?: string,"pay_slot"?: number,"prior_covered"?: boolean,"started_on"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -239,17 +245,23 @@ isOneToOne: false
                   ]
                 },"pockets": {
                   Row: {
-                    "created_at": string,"id": string,"kind": Database["public"]['Enums']["pocket_kind"],"name": string,"user_id": string
+                    "archived_at": string | null,"created_at": string,"fixed_expense_id": string | null,"id": string,"kind": Database["public"]['Enums']["pocket_kind"],"name": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"id"?: string,"kind": Database["public"]['Enums']["pocket_kind"],"name": string,"user_id"?: string
+                    "archived_at"?: string | null,"created_at"?: string,"fixed_expense_id"?: string | null,"id"?: string,"kind": Database["public"]['Enums']["pocket_kind"],"name": string,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"kind"?: Database["public"]['Enums']["pocket_kind"],"name"?: string,"user_id"?: string
+                    "archived_at"?: string | null,"created_at"?: string,"fixed_expense_id"?: string | null,"id"?: string,"kind"?: Database["public"]['Enums']["pocket_kind"],"name"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "pockets_fixed_expense_fkey"
+      columns: ["user_id","fixed_expense_id"]
+isOneToOne: false
+      referencedRelation: "fixed_expenses"
+      referencedColumns: ["user_id","id"]
+    },{
       foreignKeyName: "pockets_user_id_fkey"
       columns: ["user_id"]
 isOneToOne: false
@@ -273,14 +285,14 @@ isOneToOne: false
                   ]
                 },"set_asides": {
                   Row: {
-                    "amount": number,"created_at": string,"due_on": string,"fixed_expense_id": string | null,"id": string,"paid_movement_id": string | null,"pay_period_id": string,"source": Database["public"]['Enums']["set_aside_source"],"updated_at": string,"user_id": string
+                    "amount": number,"created_at": string,"due_on": string,"fixed_expense_id": string | null,"id": string,"paid_adjustment": number,"paid_movement_id": string | null,"pay_period_id": string,"prior_amount": number,"source": Database["public"]['Enums']["set_aside_source"],"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount": number,"created_at"?: string,"due_on": string,"fixed_expense_id"?: string | null,"id"?: string,"paid_movement_id"?: string | null,"pay_period_id": string,"source": Database["public"]['Enums']["set_aside_source"],"updated_at"?: string,"user_id"?: string
+                    "amount": number,"created_at"?: string,"due_on": string,"fixed_expense_id"?: string | null,"id"?: string,"paid_adjustment"?: number,"paid_movement_id"?: string | null,"pay_period_id": string,"prior_amount"?: number,"source": Database["public"]['Enums']["set_aside_source"],"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "amount"?: number,"created_at"?: string,"due_on"?: string,"fixed_expense_id"?: string | null,"id"?: string,"paid_movement_id"?: string | null,"pay_period_id"?: string,"source"?: Database["public"]['Enums']["set_aside_source"],"updated_at"?: string,"user_id"?: string
+                    "amount"?: number,"created_at"?: string,"due_on"?: string,"fixed_expense_id"?: string | null,"id"?: string,"paid_adjustment"?: number,"paid_movement_id"?: string | null,"pay_period_id"?: string,"prior_amount"?: number,"source"?: Database["public"]['Enums']["set_aside_source"],"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -320,8 +332,11 @@ isOneToOne: false
                            },
 "fixed_set_aside_targets":
 { Args: { "p_period": string }; Returns: {
-              "amount": number,"due_on": string,"fixed_expense_id": string,"paid": boolean
+              "amount": number,"due_on": string,"fixed_expense_id": string,"paid": boolean,"prior_amount": number
             }[]
+                           },
+"fund_fixed_pockets":
+{ Args: { "p_period": string }; Returns: undefined
                            },
 "latest_pay_period":
 { Args: Record<PropertyKey, never>; Returns: {
@@ -333,6 +348,7 @@ isOneToOne: false
 "movement_id": string,
 "pay_month": string,
 "pay_slot": number,
+"prior_covered": boolean,
 "started_on": string,
 "updated_at": string,
 "user_id": string
@@ -343,14 +359,20 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"move_fixed_pocket":
+{ Args: { "p_amount": number,"p_fixed_expense": string,"p_into_pocket": boolean,"p_occurred_on": string }; Returns: string
+                           },
 "open_pay_period":
-{ Args: { "p_amount": number,"p_expected_end_on": string,"p_pay_month": string,"p_pay_slot": number,"p_received_on": string }; Returns: string
+{ Args: { "p_amount": number,"p_ask_prior"?: boolean,"p_expected_end_on": string,"p_pay_month": string,"p_pay_slot": number,"p_pocket_kind"?: Database["public"]['Enums']["pocket_kind"],"p_prior_covered"?: boolean,"p_received_on": string }; Returns: string
+                           },
+"pay_fixed_expense":
+{ Args: { "p_amount": number,"p_cover_from_account"?: boolean,"p_fixed_expense": string,"p_occurred_on": string }; Returns: string
                            },
 "pay_instance_key":
 { Args: { "p_month": string,"p_slot": number }; Returns: number
                            },
-"pay_set_aside":
-{ Args: { "p_id": string }; Returns: string
+"pocket_balance":
+{ Args: { "p_pocket": string }; Returns: number
                            },
 "pocket_balances":
 { Args: Record<PropertyKey, never>; Returns: {
@@ -376,11 +398,11 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
 "update_pay_period":
-{ Args: { "p_amount": number,"p_id": string,"p_received_on": string }; Returns: undefined
+{ Args: { "p_amount": number,"p_id": string,"p_pocket_kind"?: Database["public"]['Enums']["pocket_kind"],"p_received_on": string }; Returns: undefined
                            }
           }
           Enums: {
-            "category_kind": "expense"|"income","debt_payment_type": "single"|"monthly","expense_split": "first"|"second"|"half","installment_plan_kind": "purchase"|"advance"|"subscription","movement_kind": "expense"|"income"|"transfer","movement_origin": "manual"|"opening_balance"|"reconciliation"|"statement"|"payday","pay_frequency": "biweekly"|"monthly","pocket_kind": "account"|"cash"|"credit_card","set_aside_source": "fixed_expense"|"card"|"debt"|"goal"
+            "category_kind": "expense"|"income","debt_payment_type": "single"|"monthly","expense_split": "first"|"second"|"half","installment_plan_kind": "purchase"|"advance"|"subscription","movement_kind": "expense"|"income"|"transfer","movement_origin": "manual"|"opening_balance"|"reconciliation"|"statement"|"payday"|"set_aside","pay_frequency": "biweekly"|"monthly","pocket_kind": "account"|"cash"|"credit_card"|"fixed_expense","set_aside_source": "fixed_expense"|"card"|"debt"|"goal"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -500,7 +522,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "category_kind": ["expense", "income"],"debt_payment_type": ["single", "monthly"],"expense_split": ["first", "second", "half"],"installment_plan_kind": ["purchase", "advance", "subscription"],"movement_kind": ["expense", "income", "transfer"],"movement_origin": ["manual", "opening_balance", "reconciliation", "statement", "payday"],"pay_frequency": ["biweekly", "monthly"],"pocket_kind": ["account", "cash", "credit_card"],"set_aside_source": ["fixed_expense", "card", "debt", "goal"]
+            "category_kind": ["expense", "income"],"debt_payment_type": ["single", "monthly"],"expense_split": ["first", "second", "half"],"installment_plan_kind": ["purchase", "advance", "subscription"],"movement_kind": ["expense", "income", "transfer"],"movement_origin": ["manual", "opening_balance", "reconciliation", "statement", "payday", "set_aside"],"pay_frequency": ["biweekly", "monthly"],"pocket_kind": ["account", "cash", "credit_card", "fixed_expense"],"set_aside_source": ["fixed_expense", "card", "debt", "goal"]
           }
         }
 } as const

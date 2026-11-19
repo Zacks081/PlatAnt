@@ -130,6 +130,17 @@ describe("a qué pago corresponde lo que llegó", () => {
     expect(matchPay(date("2026-11-11"), null, QUINCENAL).instance).toEqual(nov15);
   });
 
+  it("el primer pago es el que se estaba esperando, aunque llegue antes", () => {
+    expect(matchPay(date("2026-11-18"), null, QUINCENAL).instance).toEqual(nov30);
+  });
+
+  it("con pagos registrados, es el que sigue al último, aunque llegue antes", () => {
+    expect(matchPay(date("2026-11-18"), nov30, QUINCENAL)).toEqual({
+      instance: { year: 2026, month: 12, slot: 1 },
+      duplicateOf: nov30,
+    });
+  });
+
   it("si se olvidó registrar un pago, el siguiente se reconoce por su fecha", () => {
     const oct30: PayInstance = { year: 2026, month: 10, slot: 2 };
     expect(matchPay(date("2026-11-30"), oct30, QUINCENAL)).toEqual({
